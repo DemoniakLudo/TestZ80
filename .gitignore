@@ -1,0 +1,4 @@
+bin
+obj
+/*.suo
+/TestZ80/*.user
