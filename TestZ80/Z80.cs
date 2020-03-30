@@ -1,7 +1,8 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 
 namespace TestZ80 {
-	static public class Z80 {
+	public class Z80 {
 		const byte BIT0 = 0x01;
 		const byte BIT1 = 0x02;
 		const byte BIT2 = 0x04;
@@ -11,9 +12,6 @@ namespace TestZ80 {
 		const byte BIT6 = 0x40;
 		const byte BIT7 = 0x80;
 
-		//
-		// Flags Z80
-		//
 		const byte FLAG_0 = 0x00;
 		const byte FLAG_C = 0x01;
 		const byte FLAG_N = 0x02;
@@ -23,6 +21,14 @@ namespace TestZ80 {
 		const byte FLAG_5 = 0x20;
 		const byte FLAG_Z = 0x40;
 		const byte FLAG_S = 0x80;
+		const byte FLAGS_HC = 0x17;
+		const byte FLAGS_53 = 0x28;
+		const byte FLAGS_SZ = 0xC0;
+		const byte FLAGS_ZV = 0x44;
+		const byte FLAGS_S53 = 0xA8;
+		const byte FLAGS_SZC = 0xC1;
+		const byte FLAGS_SZN = 0xC2;
+		const byte FLAGS_SZV = 0xC4;
 
 		const byte N_FLAG_N = 0xFD;
 		const byte N_FLAG_V = 0xFB;
@@ -30,6 +36,7 @@ namespace TestZ80 {
 		const byte N_FLAG_H = 0xEF;
 		const byte N_FLAG_5 = 0xDF;
 		const byte N_FLAG_Z = 0xBF;
+		const byte N_FLAG_53 = 0xD7;
 
 		private delegate int pFct();
 
@@ -43,5168 +50,3939 @@ namespace TestZ80 {
 			public byte High;
 		}
 
-		static public Reg AF, BC, DE, HL;
-		static public Reg _AF, _BC, _DE, _HL;
-		static public Reg IX, IY, SP, PC, IR;
-		static public byte IFF1;
-		static public byte IFF2;
-		static public byte InterruptMode;
-		static public int IRQ;
-		static private Reg MemPtr;
-		static private byte[] Parite = new byte[256];
-		static private bool CBIndex = false;
-		static private int AdrCB;
-		static private int SupIrqWaitState;
-		static private int Halt;
+		public static Reg AF, BC, DE, HL, _AF, _BC, _DE, _HL, IX, IY, SP, PC, IR;
+		static ushort memPtr;
+		static int LastInstr, Halt;
+		public static byte InterruptMode;
+		static int SupIrqWaitState;
+		public static int IRQ, IFF1, IFF2;
+		static int d;
+		static byte[] TabSZYX = new byte[256];
+		static byte[] TabSZYXN = new byte[256];
+		static byte[] TabSZN = new byte[256];
+		static byte[] TabSZYXP = new byte[256];
+		static byte[] TabSZYXHP = new byte[256];
+		static byte[] TabHVC = new byte[512];
+		static byte[] TabInc = new byte[256];
+		static byte[] TabDec = new byte[256];
+		static byte[] TabSR = new byte[256];
 
-		static pFct[] tabinstr = new pFct[256]  {
-				NO_OP, ___01, ___02, ___03, ___04, ___05, ___06, ___07, // 00
-				___08, ___09, ___0A, ___0B, ___0C, ___0D, ___0E, ___0F, // 08
-				___10, ___11, ___12, ___13, ___14, ___15, ___16, ___17, // 10
-				___18, ___19, ___1A, ___1B, ___1C, ___1D, ___1E, ___1F, // 18
-				___20, ___21, ___22, ___23, ___24, ___25, ___26, ___27, // 20
-				___28, ___29, ___2A, ___2B, ___2C, ___2D, ___2E, ___2F, // 28
-				___30, ___31, ___32, ___33, ___34, ___35, ___36, ___37, // 30
-				___38, ___39, ___3A, ___3B, ___3C, ___3D, ___3E, ___3F, // 38
-				NO_OP, ___41, ___42, ___43, ___44, ___45, ___46, ___47, // 40
-				___48, NO_OP, ___4A, ___4B, ___4C, ___4D, ___4E, ___4F, // 48
-				___50, ___51, NO_OP, ___53, ___54, ___55, ___56, ___57, // 50
-				___58, ___59, ___5A, NO_OP, ___5C, ___5D, ___5E, ___5F, // 58
-				___60, ___61, ___62, ___63, NO_OP, ___65, ___66, ___67, // 60
-				___68, ___69, ___6A, ___6B, ___6C, NO_OP, ___6E, ___6F, // 68
-				___70, ___71, ___72, ___73, ___74, ___75, ___76, ___77, // 70
-				___78, ___79, ___7A, ___7B, ___7C, ___7D, ___7E, NO_OP, // 78
-				___80, ___81, ___82, ___83, ___84, ___85, ___86, ___87, // 80
-				___88, ___89, ___8A, ___8B, ___8C, ___8D, ___8E, ___8F, // 88
-				___90, ___91, ___92, ___93, ___94, ___95, ___96, ___97, // 90
-				___98, ___99, ___9A, ___9B, ___9C, ___9D, ___9E, ___9F, // 98
-				___A0, ___A1, ___A2, ___A3, ___A4, ___A5, ___A6, ___A7, // A0
-				___A8, ___A9, ___AA, ___AB, ___AC, ___AD, ___AE, ___AF, // A8
-				___B0, ___B1, ___B2, ___B3, ___B4, ___B5, ___B6, ___B7, // B0
-				___B8, ___B9, ___BA, ___BB, ___BC, ___BD, ___BE, ___BF, // B8
-				___C0, ___C1, ___C2, ___C3, ___C4, ___C5, ___C6, ___C7, // C0
-				___C8, ___C9, ___CA, ___CB, ___CC, ___CD, ___CE, ___CF, // C8
-				___D0, ___D1, ___D2, ___D3, ___D4, ___D5, ___D6, ___D7, // D0
-				___D8, ___D9, ___DA, ___DB, ___DC, ___DD, ___DE, ___DF, // D8
-				___E0, ___E1, ___E2, ___E3, ___E4, ___E5, ___E6, ___E7, // E0
-				___E8, ___E9, ___EA, ___EB, ___EC, ___ED, ___EE, ___EF, // E8
-				___F0, ___F1, ___F2, ___F3, ___F4, ___F5, ___F6, ___F7, // F0
-				___F8, ___F9, ___FA, ___FB, ___FC, ___FD, ___FE, ___FF  // F8
-			};
+		static pFct[] TabInstr = new pFct[256] {
+	___00, ___01, ___02, ___03, ___04, ___05, ___06, ___07,	
+	___08, ___09, ___0A, ___0B, ___0C, ___0D, ___0E, ___0F,	
+	___10, ___11, ___12, ___13, ___14, ___15, ___16, ___17,	
+	___18, ___19, ___1A, ___1B, ___1C, ___1D, ___1E, ___1F,	
+	___20, ___21, ___22, ___23, ___24, ___25, ___26, ___27,	
+	___28, ___29, ___2A, ___2B, ___2C, ___2D, ___2E, ___2F,	
+	___30, ___31, ___32, ___33, ___34, ___35, ___36, ___37,	
+	___38, ___39, ___3A, ___3B, ___3C, ___3D, ___3E, ___3F,	
+	___00, ___41, ___42, ___43, ___44, ___45, ___46, ___47,	
+	___48, ___00, ___4A, ___4B, ___4C, ___4D, ___4E, ___4F,	
+	___50, ___51, ___00, ___53, ___54, ___55, ___56, ___57,	
+	___58, ___59, ___5A, ___00, ___5C, ___5D, ___5E, ___5F,	
+	___60, ___61, ___62, ___63, ___00, ___65, ___66, ___67,	
+	___68, ___69, ___6A, ___6B, ___6C, ___00, ___6E, ___6F,	
+	___70, ___71, ___72, ___73, ___74, ___75, ___76, ___77,	
+	___78, ___79, ___7A, ___7B, ___7C, ___7D, ___7E, ___00,	
+	___80, ___81, ___82, ___83, ___84, ___85, ___86, ___87,	
+	___88, ___89, ___8A, ___8B, ___8C, ___8D, ___8E, ___8F,	
+	___90, ___91, ___92, ___93, ___94, ___95, ___96, ___97,	
+	___98, ___99, ___9A, ___9B, ___9C, ___9D, ___9E, ___9F,	
+	___A0, ___A1, ___A2, ___A3, ___A4, ___A5, ___A6, ___A7,	
+	___A8, ___A9, ___AA, ___AB, ___AC, ___AD, ___AE, ___AF,	
+	___B0, ___B1, ___B2, ___B3, ___B4, ___B5, ___B6, ___B7,	
+	___B8, ___B9, ___BA, ___BB, ___BC, ___BD, ___BE, ___BF,	
+	___C0, ___C1, ___C2, ___C3, ___C4, ___C5, ___C6, ___C7,	
+	___C8, ___C9, ___CA, ___CB, ___CC, ___CD, ___CE, ___C7,	
+	___D0, ___D1, ___D2, ___D3, ___D4, ___D5, ___D6, ___C7,	
+	___D8, ___D9, ___DA, ___DB, ___DC, ___DD, ___DE, ___C7,	
+	___E0, ___E1, ___E2, ___E3, ___E4, ___E5, ___E6, ___C7,	
+	___E8, ___E9, ___EA, ___EB, ___EC, ___ED, ___EE, ___C7,	
+	___F0, ___F1, ___F2, ___F3, ___F4, ___F5, ___F6, ___C7,	
+	___F8, ___F9, ___FA, ___FB, ___FC, ___FD, ___FE, ___C7	
+};
 
-		static pFct[] tabCB = new pFct[256]  {
-				CB_00, CB_01, CB_02, CB_03, CB_04, CB_05, CB_06, CB_07, // 00
-				CB_08, CB_09, CB_0A, CB_0B, CB_0C, CB_0D, CB_0E, CB_0F, // 08
-				CB_10, CB_11, CB_12, CB_13, CB_14, CB_15, CB_16, CB_17, // 10
-				CB_18, CB_19, CB_1A, CB_1B, CB_1C, CB_1D, CB_1E, CB_1F, // 18
-				CB_20, CB_21, CB_22, CB_23, CB_24, CB_25, CB_26, CB_27, // 20
-				CB_28, CB_29, CB_2A, CB_2B, CB_2C, CB_2D, CB_2E, CB_2F, // 28
-				CB_30, CB_31, CB_32, CB_33, CB_34, CB_35, CB_36, CB_37, // 30
-				CB_38, CB_39, CB_3A, CB_3B, CB_3C, CB_3D, CB_3E, CB_3F, // 38
-				CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47, // 40
-				CB_48, CB_49, CB_4A, CB_4B, CB_4C, CB_4D, CB_4E, CB_4F, // 48
-				CB_50, CB_51, CB_52, CB_53, CB_54, CB_55, CB_56, CB_57, // 50
-				CB_58, CB_59, CB_5A, CB_5B, CB_5C, CB_5D, CB_5E, CB_5F, // 58
-				CB_60, CB_61, CB_62, CB_63, CB_64, CB_65, CB_66, CB_67, // 60
-				CB_68, CB_69, CB_6A, CB_6B, CB_6C, CB_6D, CB_6E, CB_6F, // 68
-				CB_70, CB_71, CB_72, CB_73, CB_74, CB_75, CB_76, CB_77, // 70
-				CB_78, CB_79, CB_7A, CB_7B, CB_7C, CB_7D, CB_7E, CB_7F, // 78
-				CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87, // 80
-				CB_88, CB_89, CB_8A, CB_8B, CB_8C, CB_8D, CB_8E, CB_8F, // 88
-				CB_90, CB_91, CB_92, CB_93, CB_94, CB_95, CB_96, CB_97, // 90
-				CB_98, CB_99, CB_9A, CB_9B, CB_9C, CB_9D, CB_9E, CB_9F, // 98
-				CB_A0, CB_A1, CB_A2, CB_A3, CB_A4, CB_A5, CB_A6, CB_A7, // A0
-				CB_A8, CB_A9, CB_AA, CB_AB, CB_AC, CB_AD, CB_AE, CB_AF, // A8
-				CB_B0, CB_B1, CB_B2, CB_B3, CB_B4, CB_B5, CB_B6, CB_B7, // B0
-				CB_B8, CB_B9, CB_BA, CB_BB, CB_BC, CB_BD, CB_BE, CB_BF, // B8
-				CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7, // C0
-				CB_C8, CB_C9, CB_CA, CB_CB, CB_CC, CB_CD, CB_CE, CB_CF, // C8
-				CB_D0, CB_D1, CB_D2, CB_D3, CB_D4, CB_D5, CB_D6, CB_D7, // D0
-				CB_D8, CB_D9, CB_DA, CB_DB, CB_DC, CB_DD, CB_DE, CB_DF, // D8
-				CB_E0, CB_E1, CB_E2, CB_E3, CB_E4, CB_E5, CB_E6, CB_E7, // E0
-				CB_E8, CB_E9, CB_EA, CB_EB, CB_EC, CB_ED, CB_EE, CB_EF, // E8
-				CB_F0, CB_F1, CB_F2, CB_F3, CB_F4, CB_F5, CB_F6, CB_F7, // F0
-				CB_F8, CB_F9, CB_FA, CB_FB, CB_FC, CB_FD, CB_FE, CB_FF, // F8
-			};
+		static pFct[] TabInstrCB = new pFct[256] {
+	CB_00, CB_01, CB_02, CB_03, CB_04, CB_05, CB_06, CB_07,	
+	CB_08, CB_09, CB_0A, CB_0B, CB_0C, CB_0D, CB_0E, CB_0F,	
+	CB_10, CB_11, CB_12, CB_13, CB_14, CB_15, CB_16, CB_17,	
+	CB_18, CB_19, CB_1A, CB_1B, CB_1C, CB_1D, CB_1E, CB_1F,	
+	CB_20, CB_21, CB_22, CB_23, CB_24, CB_25, CB_26, CB_27,	
+	CB_28, CB_29, CB_2A, CB_2B, CB_2C, CB_2D, CB_2E, CB_2F,	
+	CB_30, CB_31, CB_32, CB_33, CB_34, CB_35, CB_36, CB_37,	
+	CB_38, CB_39, CB_3A, CB_3B, CB_3C, CB_3D, CB_3E, CB_3F,	
+	CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, CB_44, CB_45, CB_46, CB_47,	
+	CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, CB_84, CB_85, CB_86, CB_87,	
+	CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, CB_C4, CB_C5, CB_C6, CB_C7,	
+};
 
-		static pFct[] tabED = new pFct[256]  {
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 00
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 08
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 10
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 18
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 20
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 28
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 30
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 38
-				ED_40, ED_41, ED_42, ED_43, ED_44, ED_45, ED_46, ED_47, // 40
-				ED_48, ED_49, ED_4A, ED_4B, ED_44, ED_4D, ED_46, ED_4F, // 48
-				ED_50, ED_51, ED_52, ED_53, ED_44, ED_45, ED_56, ED_57, // 50
-				ED_58, ED_59, ED_5A, ED_5B, ED_44, ED_45, ED_5E, ED_5F, // 58
-				ED_60, ED_61, ED_62, ED_63, ED_44, ED_45, ED_46, ED_67, // 60
-				ED_68, ED_69, ED_6A, ED_6B, ED_44, ED_45, ED_46, ED_6F, // 68
-				ED_70, ED_71, ED_72, ED_73, ED_44, ED_45, ED_56, ed___, // 70
-				ED_78, ED_79, ED_7A, ED_7B, ED_44, ED_45, ED_5E, ed___, // 78
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 80
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 88
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 90
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // 98
-				ED_A0, ED_A1, ED_A2, ED_A3, ed___, ed___, ed___, ed___, // A0
-				ED_A8, ED_A9, ED_AA, ED_AB, ed___, ed___, ed___, ed___, // A8
-				ED_B0, ED_B1, ED_B2, ED_B3, ed___, ed___, ed___, ed___, // B0
-				ED_B8, ED_B9, ED_BA, ED_BB, ed___, ed___, ed___, ed___, // B8
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // C0
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // C8
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // D0
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // D8
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // E0
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // E8
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___, // F0
-				ed___, ed___, ed___, ed___, ed___, ed___, ed___, ed___  // F8
-			};
+		static pFct[] TabInstrED = new pFct[256] {
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	ED_40, ED_41, ED_42, ED_43, ED_44, ED_45, ED_46, ED_47,	
+	ED_48, ED_49, ED_4A, ED_4B, ED_44, ED_45, ED_46, ED_4F,	
+	ED_50, ED_51, ED_52, ED_53, ED_44, ED_45, ED_56, ED_57,	
+	ED_58, ED_59, ED_5A, ED_5B, ED_44, ED_45, ED_5E, ED_5F,	
+	ED_60, ED_61, ED_62, ___22, ED_44, ED_45, ED_56, ED_67,	
+	ED_68, ED_69, ED_6A, ___2A, ED_44, ED_45, ED_56, ED_6F,	
+	ED_70, ED_71, ED_72, ED_73, ED_44, ED_45, ED_56, ___00,	
+	ED_78, ED_79, ED_7A, ED_7B, ED_44, ED_45, ED_5E, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	ED_A0, ED_A1, ED_A2, ED_A3, ___00, ___00, ___00, ___00,	
+	ED_A8, ED_A9, ED_AA, ED_AB, ___00, ___00, ___00, ___00,	
+	ED_B0, ED_B1, ED_B2, ED_B3, ___00, ___00, ___00, ___00,	
+	ED_B8, ED_B9, ED_BA, ED_BB, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00,	
+	___00, ___00, ___00, ___00, ___00, ___00, ___00, ___00	
+};
 
-		static pFct[] tabIX = new pFct[256]  {
-				dd___, ___01, ___02, ___03, ___04, ___05, ___06, ___07, // 00
-				___08, DD_09, ___0A, ___0B, ___0C, ___0D, ___0E, ___0F, // 08
-				___10, ___11, ___12, ___13, ___14, ___15, ___16, ___17, // 10
-				___18, DD_19, ___1A, ___1B, ___1C, ___1D, ___1E, ___1F, // 18
-				___20, DD_21, DD_22, DD_23, DD_24, DD_25, DD_26, ___27, // 20
-				___28, DD_29, DD_2A, DD_2B, DD_2C, DD_2D, DD_2E, ___2F, // 28
-				___30, ___31, ___32, ___33, DD_34, DD_35, DD_36, ___37, // 30
-				___38, DD_39, ___3A, ___3B, ___3C, ___3D, ___3E, ___3F, // 38
-				dd___, ___41, ___42, ___43, DD_44, DD_45, DD_46, ___47, // 40
-				___48, dd___, ___4A, ___4B, DD_4C, DD_4D, DD_4E, ___4F, // 48
-				___50, ___51, dd___, ___53, DD_54, DD_55, DD_56, ___57, // 50
-				___58, ___59, ___5A, dd___, DD_5C, DD_5D, DD_5E, ___5F, // 58
-				DD_60, DD_61, DD_62, DD_63, dd___, DD_65, DD_66, DD_67, // 60
-				DD_68, DD_69, DD_6A, DD_6B, DD_6C, dd___, DD_6E, DD_6F, // 68
-				DD_70, DD_71, DD_72, DD_73, DD_74, DD_75, ___76, DD_77, // 70
-				___78, ___79, ___7A, ___7B, DD_7C, DD_7D, DD_7E, dd___, // 78
-				___80, ___81, ___82, ___83, DD_84, DD_85, DD_86, ___87, // 80
-				___88, ___89, ___8A, ___8B, DD_8C, DD_8D, DD_8E, ___8F, // 88
-				___90, ___91, ___92, ___93, DD_94, DD_95, DD_96, ___97, // 90
-				___98, ___99, ___9A, ___9B, DD_9C, DD_9D, DD_9E, ___9F, // 98
-				___A0, ___A1, ___A2, ___A3, DD_A4, DD_A5, DD_A6, ___A7, // A0
-				___A8, ___A9, ___AA, ___AB, DD_AC, DD_AD, DD_AE, ___AF, // A8
-				___B0, ___B1, ___B2, ___B3, DD_B4, DD_B5, DD_B6, ___B7, // B0
-				___B8, ___B9, ___BA, ___BB, DD_BC, DD_BD, DD_BE, ___BF, // B8
-				___C0, ___C1, ___C2, ___C3, ___C4, ___C5, ___C6, ___C7, // C0
-				___C8, ___C9, ___CA, DD_CB, ___CC, ___CD, ___CE, ___CF, // C8
-				___D0, ___D1, ___D2, ___D3, ___D4, ___D5, ___D6, ___D7, // D0
-				___D8, ___D9, ___DA, ___DB, ___DC, dd___, ___DE, ___DF, // D8
-				___E0, DD_E1, ___E2, DD_E3, ___E4, DD_E5, ___E6, ___E7, // E0
-				___E8, DD_E9, ___EA, ___EB, ___EC, ___ED, ___EE, ___EF, // E8
-				___F0, ___F1, ___F2, ___F3, ___F4, ___F5, ___F6, ___F7, // F0
-				___F8, DD_F9, ___FA, ___FB, ___FC, DD_FD, ___FE, ___FF  // F8
-			};
+		static pFct[] TabInstrDD = new pFct[256] {
+	___00, ___01, ___02, ___03, ___04, ___05, ___06, ___07,	
+	___08, DD_09, ___0A, ___0B, ___0C, ___0D, ___0E, ___0F,	
+	___10, ___11, ___12, ___13, ___14, ___15, ___16, ___17,	
+	___18, DD_19, ___1A, ___1B, ___1C, ___1D, ___1E, ___1F,	
+	___20, DD_21, DD_22, DD_23, DD_24, DD_25, DD_26, ___27,	
+	___28, DD_29, DD_2A, DD_2B, DD_2C, DD_2D, DD_2E, ___2F,	
+	___30, ___31, ___32, ___33, DD_34, DD_35, DD_36, ___37,	
+	___38, DD_39, ___3A, ___3B, ___3C, ___3D, ___3E, ___3F,	
+	___00, ___41, ___42, ___43, DD_44, DD_45, DD_46, ___47,	
+	___48, ___00, ___4A, ___4B, DD_4C, DD_4D, DD_4E, ___4F,	
+	___50, ___51, ___00, ___53, DD_54, DD_55, DD_56, ___57,	
+	___58, ___59, ___5A, ___00, DD_5C, DD_5D, DD_5E, ___5F,	
+	DD_60, DD_61, DD_62, DD_63, ___00, DD_65, DD_66, DD_67,	
+	DD_68, DD_69, DD_6A, DD_6B, DD_6C, ___00, DD_6E, DD_6F,	
+	DD_70, DD_71, DD_72, DD_73, DD_74, DD_75, ___76, DD_77,	
+	___78, ___79, ___7A, ___7B, DD_7C, DD_7D, DD_7E, ___00,	
+	___80, ___81, ___82, ___83, DD_84, DD_85, DD_86, ___87,	
+	___88, ___89, ___8A, ___8B, DD_8C, DD_8D, DD_8E, ___8F,	
+	___90, ___91, ___92, ___93, DD_94, DD_95, DD_96, ___97,	
+	___98, ___99, ___9A, ___9B, DD_9C, DD_9D, DD_9E, ___9F,	
+	___A0, ___A1, ___A2, ___A3, DD_A4, DD_A5, DD_A6, ___A7,	
+	___A8, ___A9, ___AA, ___AB, DD_AC, DD_AD, DD_AE, ___AF,	
+	___B0, ___B1, ___B2, ___B3, DD_B4, DD_B5, DD_B6, ___B7,	
+	___B8, ___B9, ___BA, ___BB, DD_BC, DD_BD, DD_BE, ___BF,	
+	___C0, ___C1, ___C2, ___C3, ___C4, ___C5, ___C6, ___C7,	
+	___C8, ___C9, ___CA, DD_CB, ___CC, ___CD, ___CE, ___C7,	
+	___D0, ___D1, ___D2, ___D3, ___D4, ___D5, ___D6, ___C7,	
+	___D8, ___D9, ___DA, ___DB, ___DC, ___DD, ___DE, ___C7,	
+	___E0, DD_E1, ___E2, DD_E3, ___E4, DD_E5, ___E6, ___C7,	
+	___E8, DD_E9, ___EA, ___EB, ___EC, ___ED, ___EE, ___C7,	
+	___F0, ___F1, ___F2, ___F3, ___F4, ___F5, ___F6, ___C7,	
+	___F8, DD_F9, ___FA, ___FB, ___FC, ___FD, ___FE, ___C7	
+};
 
-		static pFct[] tabIY = new pFct[256]  {
-				fd___, ___01, ___02, ___03, ___04, ___05, ___06, ___07, // 00
-				___08, FD_09, ___0A, ___0B, ___0C, ___0D, ___0E, ___0F, // 08
-				___10, ___11, ___12, ___13, ___14, ___15, ___16, ___17, // 10
-				___18, FD_19, ___1A, ___1B, ___1C, ___1D, ___1E, ___1F, // 18
-				___20, FD_21, FD_22, FD_23, FD_24, FD_25, FD_26, ___27, // 20
-				___28, FD_29, FD_2A, FD_2B, FD_2C, FD_2D, FD_2E, ___2F, // 28
-				___30, ___31, ___32, ___33, FD_34, FD_35, FD_36, ___37, // 30
-				___38, FD_39, ___3A, ___3B, ___3C, ___3D, ___3E, ___3F, // 38
-				fd___, ___41, ___42, ___43, FD_44, FD_45, FD_46, ___47, // 40
-				___48, fd___, ___4A, ___4B, FD_4C, FD_4D, FD_4E, ___4F, // 48
-				___50, ___51, fd___, ___53, FD_54, FD_55, FD_56, ___57, // 50
-				___58, ___59, ___5A, fd___, FD_5C, FD_5D, FD_5E, ___5F, // 58
-				FD_60, FD_61, FD_62, FD_63, fd___, FD_65, FD_66, FD_67, // 60
-				FD_68, FD_69, FD_6A, FD_6B, FD_6C, fd___, FD_6E, FD_6F, // 68
-				FD_70, FD_71, FD_72, FD_73, FD_74, FD_75, ___76, FD_77, // 70
-				___78, ___79, ___7A, ___7B, FD_7C, FD_7D, FD_7E, fd___, // 78
-				___80, ___81, ___82, ___83, FD_84, FD_85, FD_86, ___87, // 80
-				___88, ___89, ___8A, ___8B, FD_8C, FD_8D, FD_8E, ___8F, // 88
-				___90, ___91, ___92, ___93, FD_94, FD_95, FD_96, ___97, // 90
-				___98, ___99, ___9A, ___9B, FD_9C, FD_9D, FD_9E, ___9F, // 98
-				___A0, ___A1, ___A2, ___A3, FD_A4, FD_A5, FD_A6, ___A7, // A0
-				___A8, ___A9, ___AA, ___AB, FD_AC, FD_AD, FD_AE, ___AF, // A8
-				___B0, ___B1, ___B2, ___B3, FD_B4, FD_B5, FD_B6, ___B7, // B0
-				___B8, ___B9, ___BA, ___BB, FD_BC, FD_BD, FD_BE, ___BF, // B8
-				___C0, ___C1, ___C2, ___C3, ___C4, ___C5, ___C6, ___C7, // C0
-				___C8, ___C9, ___CA, FD_CB, ___CC, ___CD, ___CE, ___CF, // C8
-				___D0, ___D1, ___D2, ___D3, ___D4, ___D5, ___D6, ___D7, // D0
-				___D8, ___D9, ___DA, ___DB, ___DC, FD_DD, ___DE, ___DF, // D8
-				___E0, FD_E1, ___E2, FD_E3, ___E4, FD_E5, ___E6, ___E7, // E0
-				___E8, FD_E9, ___EA, ___EB, ___EC, ___ED, ___EE, ___EF, // E8
-				___F0, ___F1, ___F2, ___F3, ___F4, ___F5, ___F6, ___F7, // F0
-				___F8, FD_F9, ___FA, ___FB, ___FC, fd___, ___FE, ___FF  // F8
-			};
+		static pFct[] TabInstrFD = new pFct[256] {
+	___00, ___01, ___02, ___03, ___04, ___05, ___06, ___07,	
+	___08, FD_09, ___0A, ___0B, ___0C, ___0D, ___0E, ___0F,	
+	___10, ___11, ___12, ___13, ___14, ___15, ___16, ___17,	
+	___18, FD_19, ___1A, ___1B, ___1C, ___1D, ___1E, ___1F,	
+	___20, FD_21, FD_22, FD_23, FD_24, FD_25, FD_26, ___27,	
+	___28, FD_29, FD_2A, FD_2B, FD_2C, FD_2D, FD_2E, ___2F,	
+	___30, ___31, ___32, ___33, FD_34, FD_35, FD_36, ___37,	
+	___38, FD_39, ___3A, ___3B, ___3C, ___3D, ___3E, ___3F,	
+	___00, ___41, ___42, ___43, FD_44, FD_45, FD_46, ___47,	
+	___48, ___00, ___4A, ___4B, FD_4C, FD_4D, FD_4E, ___4F,	
+	___50, ___51, ___00, ___53, FD_54, FD_55, FD_56, ___57,	
+	___58, ___59, ___5A, ___00, FD_5C, FD_5D, FD_5E, ___5F,	
+	FD_60, FD_61, FD_62, FD_63, ___00, FD_65, FD_66, FD_67,	
+	FD_68, FD_69, FD_6A, FD_6B, FD_6C, ___00, FD_6E, FD_6F,	
+	FD_70, FD_71, FD_72, FD_73, FD_74, FD_75, ___76, FD_77,	
+	___78, ___79, ___7A, ___7B, FD_7C, FD_7D, FD_7E, ___00,	
+	___80, ___81, ___82, ___83, FD_84, FD_85, FD_86, ___87,	
+	___88, ___89, ___8A, ___8B, FD_8C, FD_8D, FD_8E, ___8F,	
+	___90, ___91, ___92, ___93, FD_94, FD_95, FD_96, ___97,	
+	___98, ___99, ___9A, ___9B, FD_9C, FD_9D, FD_9E, ___9F,	
+	___A0, ___A1, ___A2, ___A3, FD_A4, FD_A5, FD_A6, ___A7,	
+	___A8, ___A9, ___AA, ___AB, FD_AC, FD_AD, FD_AE, ___AF,	
+	___B0, ___B1, ___B2, ___B3, FD_B4, FD_B5, FD_B6, ___B7,	
+	___B8, ___B9, ___BA, ___BB, FD_BC, FD_BD, FD_BE, ___BF,	
+	___C0, ___C1, ___C2, ___C3, ___C4, ___C5, ___C6, ___C7,	
+	___C8, ___C9, ___CA, FD_CB, ___CC, ___CD, ___CE, ___C7,	
+	___D0, ___D1, ___D2, ___D3, ___D4, ___D5, ___D6, ___C7,	
+	___D8, ___D9, ___DA, ___DB, ___DC, ___DD, ___DE, ___C7,	
+	___E0, FD_E1, ___E2, FD_E3, ___E4, FD_E5, ___E6, ___C7,	
+	___E8, FD_E9, ___EA, ___EB, ___EC, ___ED, ___EE, ___C7,	
+	___F0, ___F1, ___F2, ___F3, ___F4, ___F5, ___F6, ___C7,	
+	___F8, FD_F9, ___FA, ___FB, ___FC, ___FD, ___FE, ___C7	
+};
 
-		static int ADD_R8(int v, int c) {
-			int t = AF.High + v + (c & FLAG_C);
-			AF.Low = (byte)(((~(AF.High ^ v) & (v ^ t) & 0x80) != 0 ? FLAG_V : 0) | (t >> 8) | (t & (FLAG_S | FLAG_3 | FLAG_5)) | (((t & 0xFF) != 0) ? 0 : FLAG_Z) | ((AF.High ^ v ^ t) & FLAG_H));
-			AF.High = (byte)t;
+		static pFct[] TabInstrCBDD = new pFct[256] {
+	CB_00, CB_01, CB_02, CB_03, DC_04, DC_05, DC_06, CB_07,	
+	CB_08, CB_09, CB_0A, CB_0B, DC_0C, DC_0D, DC_0E, CB_0F,	
+	CB_10, CB_11, CB_12, CB_13, DC_14, DC_15, DC_16, CB_17,	
+	CB_18, CB_19, CB_1A, CB_1B, DC_1C, DC_1D, DC_1E, CB_1F,	
+	CB_20, CB_21, CB_22, CB_23, DC_24, DC_25, DC_26, CB_27,	
+	CB_28, CB_29, CB_2A, CB_2B, DC_2C, DC_2D, DC_2E, CB_2F,	
+	CB_30, CB_31, CB_32, CB_33, DC_34, DC_35, DC_36, CB_37,	
+	CB_38, CB_39, CB_3A, CB_3B, DC_3C, DC_3D, DC_3E, CB_3F,	
+	CB_40, CB_41, CB_42, CB_43, DC_44, DC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, DC_44, DC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, DC_44, DC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, DC_44, DC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, DC_44, DC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, DC_44, DC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, DC_44, DC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, DC_44, DC_45, DC_46, CB_47,	
+	CB_80, CB_81, CB_82, CB_83, DC_84, DC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, DC_84, DC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, DC_84, DC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, DC_84, DC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, DC_84, DC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, DC_84, DC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, DC_84, DC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, DC_84, DC_85, DC_86, CB_87,	
+	CB_C0, CB_C1, CB_C2, CB_C3, DC_C4, DC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, DC_C4, DC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, DC_C4, DC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, DC_C4, DC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, DC_C4, DC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, DC_C4, DC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, DC_C4, DC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, DC_C4, DC_C5, DC_C6, CB_C7,	
+};
+
+		static pFct[] TabInstrCBFD = new pFct[256] {
+	CB_00, CB_01, CB_02, CB_03, FC_04, FC_05, DC_06, CB_07,	
+	CB_08, CB_09, CB_0A, CB_0B, FC_0C, FC_0D, DC_0E, CB_0F,	
+	CB_10, CB_11, CB_12, CB_13, FC_14, FC_15, DC_16, CB_17,	
+	CB_18, CB_19, CB_1A, CB_1B, FC_1C, FC_1D, DC_1E, CB_1F,	
+	CB_20, CB_21, CB_22, CB_23, FC_24, FC_25, DC_26, CB_27,	
+	CB_28, CB_29, CB_2A, CB_2B, FC_2C, FC_2D, DC_2E, CB_2F,	
+	CB_30, CB_31, CB_32, CB_33, FC_34, FC_35, DC_36, CB_37,	
+	CB_38, CB_39, CB_3A, CB_3B, FC_3C, FC_3D, DC_3E, CB_3F,	
+	CB_40, CB_41, CB_42, CB_43, FC_44, FC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, FC_44, FC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, FC_44, FC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, FC_44, FC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, FC_44, FC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, FC_44, FC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, FC_44, FC_45, DC_46, CB_47,	
+	CB_40, CB_41, CB_42, CB_43, FC_44, FC_45, DC_46, CB_47,	
+	CB_80, CB_81, CB_82, CB_83, FC_84, FC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, FC_84, FC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, FC_84, FC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, FC_84, FC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, FC_84, FC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, FC_84, FC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, FC_84, FC_85, DC_86, CB_87,	
+	CB_80, CB_81, CB_82, CB_83, FC_84, FC_85, DC_86, CB_87,	
+	CB_C0, CB_C1, CB_C2, CB_C3, FC_C4, FC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, FC_C4, FC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, FC_C4, FC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, FC_C4, FC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, FC_C4, FC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, FC_C4, FC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, FC_C4, FC_C5, DC_C6, CB_C7,	
+	CB_C0, CB_C1, CB_C2, CB_C3, FC_C4, FC_C5, DC_C6, CB_C7,	
+};
+
+		static int ___00() {
 			return 1;
 		}
 
-		static int SUB_R8(int v, int c) {
-			int t = AF.High - v - (c & FLAG_C);
-			AF.Low = (byte)((((AF.High ^ v) & (AF.High ^ t) & 0x80) != 0 ? FLAG_V : 0) | FLAG_N | -(t >> 8) | (t & (FLAG_S | FLAG_3 | FLAG_5)) | (((t & 0xFF) != 0) ? 0 : FLAG_Z) | ((AF.High ^ v ^ t) & FLAG_H));
-			AF.High = (byte)t;
-			return 1;
-		}
-
-		static int CP_R8(int v) {
-			int t = AF.High - v;
-			AF.Low = (byte)((((AF.High ^ v) & (AF.High ^ t) & 0x80) != 0 ? FLAG_V : 0) | FLAG_N | -(t >> 8) | (t & FLAG_S) | (v & (FLAG_5 | FLAG_3)) | (((t & 0xFF) != 0) ? 0 : FLAG_Z) | ((AF.High ^ v ^ t) & FLAG_H));
-			return 1;
-		}
-
-		static int AND_R8(int v) {
-			AF.High &= (byte)v;
-			AF.Low = (byte)(FLAG_H | Parite[AF.High]);
-			return 1;
-		}
-
-		static int OR_R8(int v) {
-			AF.High |= (byte)v;
-			AF.Low = Parite[AF.High];
-			return 1;
-		}
-
-		static int XOR_R8(int v) {
-			AF.High ^= (byte)v;
-			AF.Low = Parite[AF.High];
-			return 1;
-		}
-
-		static int FLAG_INC(int reg) {
-			AF.Low = (byte)((AF.Low & FLAG_C) | (reg & (FLAG_S | FLAG_3 | FLAG_5)) | (reg == 0x80 ? FLAG_V : 0) | ((reg & 0x0F) != 0 ? 0 : FLAG_H) | ((reg != 0) ? 0 : FLAG_Z));
-			return 1;
-		}
-
-		static int FLAG_DEC(int reg) {
-			AF.Low = (byte)(FLAG_N | (AF.Low & FLAG_C) | (reg == 0x7F ? FLAG_V : 0) | ((reg & 0x0F) == 0x0F ? FLAG_H : 0) | (reg & (FLAG_S | FLAG_3 | FLAG_5)) | ((reg != 0) ? 0 : FLAG_Z));
-			return 1;
-		}
-
-		static int ADD_R16(ref ushort Reg, int v) {
-			ushort tmp = Reg;
-			MemPtr.Word = (ushort)(Reg + 1);
-			Reg = (ushort)(Reg + v);
-			AF.Low = (byte)(AF.Low & (FLAG_S | FLAG_Z | FLAG_V) | ((Reg >> 8) & (FLAG_5 | FLAG_3)));
-			if (tmp > Reg)
-				AF.Low |= FLAG_C;
-
-			if (((tmp ^ v ^ Reg) & 0x1000) != 0)
-				AF.Low |= FLAG_H;
-
+		static int ___01() {
+			BC.Word = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
 			return 3;
 		}
 
-		static int ADC_R16(int v) {
-			int t = HL.Word + v + (AF.Low & FLAG_C);
-			MemPtr.Word = (ushort)(HL.Word + 1);
-			AF.Low = (byte)(((t & 0x10000) != 0 ? FLAG_C : 0) | ((~(HL.Word ^ v) & (v ^ t) & 0x8000) != 0 ? FLAG_V : 0) | (((HL.Word ^ v ^ t) & 0x1000) != 0 ? FLAG_H : 0) | ((t & 0xFFFF) != 0 ? 0 : FLAG_Z) | ((t >> 8) & (FLAG_S | FLAG_5 | FLAG_3)));
-			HL.Word = (ushort)t;
-			return 4;
-		}
-
-		static int SBC_R16(int v) {
-			int t = HL.Word - v - (AF.Low & FLAG_C);
-			MemPtr.Word = (ushort)(HL.Word + 1);
-			AF.Low = (byte)(FLAG_N | ((t & 0x10000) != 0 ? FLAG_C : 0) | (((HL.Word ^ v) & (HL.Word ^ t) & 0x8000) != 0 ? FLAG_V : 0) | (((HL.Word ^ v ^ t) & 0x1000) != 0 ? FLAG_H : 0) | ((t & 0xFFFF) != 0 ? 0 : FLAG_Z) | ((t >> 8) & (FLAG_S | FLAG_5 | FLAG_3)));
-			HL.Word = (ushort)t;
-			return 4;
-		}
-
-		static int Bit(byte r, int b) {
-			AF.Low = (byte)((AF.Low & FLAG_C) | FLAG_H | Parite[r & b]);
+		static int ___02() {
+			VGA.POKE8(memPtr = BC.Word, AF.High);
+			memPtr = (ushort)((++memPtr & 0xFF) + (AF.High << 8));
 			return 2;
 		}
 
-		static int Res(ref byte r, int b) {
-			r = (byte)((CBIndex ? VGA.PEEK8(AdrCB) : r) & ~b);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, r);
-
-			return (2);
+		static int ___03() {
+			BC.Word++;
+			return SupIrqWaitState = 2;
 		}
 
-		static int Set(ref byte r, int b) {
-			r = (byte)((CBIndex ? VGA.PEEK8(AdrCB) : r) | b);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, r);
-
-			return (2);
+		static int ___04() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++BC.High]);
+			return 1;
 		}
 
-		static byte RLC(byte reg) {
-			AF.Low = (byte)(reg >> 7);
-			reg = (byte)((reg << 1) | AF.Low);
-			AF.Low |= Parite[reg];
-			return (reg);
+		static int ___05() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--BC.High]);
+			return 1;
 		}
 
-		static byte RRC(byte reg) {
-			AF.Low = (byte)(reg & FLAG_C);
-			reg = (byte)((reg >> 1) | (AF.Low << 7));
-			AF.Low |= Parite[reg];
-			return (reg);
+		static int ___06() {
+			BC.High = VGA.PEEK8(PC.Word++);
+			return 2;
 		}
 
-		static byte RL(byte reg) {
-			int i = reg << 1;
-			reg = (byte)(i | (AF.Low & FLAG_C));
-			AF.Low = (byte)((i >> 8) | Parite[reg]);
-			return (reg);
+		static int ___07() {
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | ((AF.High = (byte)((AF.High << 1) | (AF.High >> 7))) & (FLAGS_53 | FLAG_C)));
+			return 1;
 		}
 
-		static byte RR(byte reg) {
-			byte i = (byte)((reg >> 1) | (AF.Low << 7));
-			AF.Low = (byte)((reg & FLAG_C) | Parite[i]);
-			reg = i;
-			return (reg);
+		static int ___08() {
+			ushort t = AF.Word;
+			AF.Word = _AF.Word;
+			_AF.Word = t;
+			return 1;
 		}
 
-		static byte SLA(byte reg) {
-			AF.Low = (byte)(reg >> 7);
-			reg = (byte)(reg << 1);
-			AF.Low |= Parite[reg];
-			return (reg);
+		static int ___09() {
+			int z = (memPtr = HL.Word) + BC.Word, c = (memPtr++ ^ BC.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | (((HL.Word = (ushort)z) >> 8) & FLAGS_53));
+			return 3;
 		}
 
-		static byte SRA(byte reg) {
-			AF.Low = (byte)(reg & FLAG_C);
-			reg = (byte)((reg >> 1) | (reg & FLAG_S));
-			AF.Low |= Parite[reg];
-			return (reg);
+		static int ___0A() {
+			AF.High = VGA.PEEK8(memPtr = BC.Word);
+			memPtr++;
+			return 2;
 		}
 
-		static byte SLL(byte reg) {
-			AF.Low = (byte)(reg >> 7);
-			reg = (byte)((reg << 1) | 1);
-			AF.Low |= Parite[reg];
-			return (reg);
+		static int ___0B() {
+			BC.Word--;
+			return SupIrqWaitState = 2;
 		}
 
-		static byte SRL(byte reg) {
-			AF.Low = (byte)(reg & FLAG_C);
-			reg = (byte)(reg >> 1);
-			AF.Low |= Parite[reg];
-			return (reg);
+		static int ___0C() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++BC.Low]);
+			return 1;
 		}
 
-		static int PUSH(ushort Reg) {
-			SP.Word -= 2;
-			VGA.POKE16(SP.Word, Reg);
+		static int ___0D() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--BC.Low]);
+			return 1;
+		}
+
+		static int ___0E() {
+			BC.Low = VGA.PEEK8(PC.Word++);
+			return 2;
+		}
+
+		static int ___0F() {
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (AF.High & FLAG_C));
+			AF.Low |= (byte)((AF.High = (byte)((AF.High >> 1) | (AF.Low << 7))) & FLAGS_53);
+			return 1;
+		}
+
+		static int ___10() {
+			if (--BC.High != 0) {
+				PC.Word = (ushort)(PC.Word + (sbyte)VGA.PEEK8(PC.Word));
+				memPtr = ++PC.Word;
+				return 4;
+			}
+			PC.Word++;
+			return 3;
+		}
+
+		static int ___11() {
+			DE.Word = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			return 3;
+		}
+
+		static int ___12() {
+			VGA.POKE8(memPtr = DE.Word, AF.High);
+			memPtr = (ushort)((++memPtr & 0xFF) + (AF.High << 8));
+			return 2;
+		}
+
+		static int ___13() {
+			DE.Word++;
+			return SupIrqWaitState = 2;
+		}
+
+		static int ___14() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++DE.High]);
+			return 1;
+		}
+
+		static int ___15() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--DE.High]);
+			return 1;
+		}
+
+		static int ___16() {
+			DE.High = VGA.PEEK8(PC.Word++);
+			return 2;
+		}
+
+		static int ___17() {
+			int a = AF.High << 1;
+			AF.Low = (byte)(((AF.High = (byte)(a | (AF.Low & FLAG_C))) & FLAGS_53) | (a >> 8) | (AF.Low & FLAGS_SZV));
+			return 1;
+		}
+
+		static int ___18() {
+			PC.Word = (ushort)(PC.Word + (sbyte)VGA.PEEK8(PC.Word));
+			memPtr = ++PC.Word;
+			return 3;
+		}
+
+		static int ___19() {
+			int z = (memPtr = HL.Word) + DE.Word, c = (memPtr++ ^ DE.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | (((HL.Word = (ushort)z) >> 8) & FLAGS_53));
+			return 3;
+		}
+
+		static int ___1A() {
+			AF.High = VGA.PEEK8(memPtr = DE.Word);
+			memPtr++;
+			return 2;
+		}
+
+		static int ___1B() {
+			DE.Word--;
+			return SupIrqWaitState = 2;
+		}
+
+		static int ___1C() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++DE.Low]);
+			return 1;
+		}
+
+		static int ___1D() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--DE.Low]);
+			return 1;
+		}
+
+		static int ___1E() {
+			DE.Low = VGA.PEEK8(PC.Word++);
+			return 2;
+		}
+
+		static int ___1F() {
+			int c = AF.High & FLAG_C;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | ((AF.High = (byte)((AF.High >> 1) | (AF.Low << 7))) & FLAGS_53) | c);
+			return 1;
+		}
+
+		static int ___20() {
+			if ((AF.Low & FLAG_Z) != 0) {
+				PC.Word++;
+				return 2;
+			}
+			PC.Word = (ushort)(PC.Word + (sbyte)VGA.PEEK8(PC.Word));
+			memPtr = ++PC.Word;
+			return 3;
+		}
+
+		static int ___21() {
+			HL.Word = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			return 3;
+		}
+
+		static int ___22() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			VGA.POKE16(memPtr++, HL.Word);
+			return 5;
+		}
+
+		static int ___23() {
+			HL.Word++;
+			return SupIrqWaitState = 2;
+		}
+
+		static int ___24() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++HL.High]);
+			return 1;
+		}
+
+		static int ___25() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--HL.High]);
+			return 1;
+		}
+
+		static int ___26() {
+			HL.High = VGA.PEEK8(PC.Word++);
+			return 2;
+		}
+
+		static int ___27() {
+			int a = AF.High, t = (AF.High & 0x0F) > 0x09 || (AF.Low & FLAG_H) != 0 ? 6 : 0;
+			if (a > 0x99 || (AF.Low & FLAG_C) != 0)
+				t |= 0x60;
+
+			AF.High += (byte)((AF.Low & FLAG_N) != 0 ? -t : t);
+			AF.Low = (byte)((AF.Low & FLAG_N) | TabSZYXP[AF.High] | (t >> 6) | ((AF.High ^ a) & FLAG_H));
+			return 1;
+		}
+
+		static int ___28() {
+			if ((AF.Low & FLAG_Z) != 0) {
+				PC.Word = (ushort)(PC.Word + (sbyte)VGA.PEEK8(PC.Word));
+				memPtr = ++PC.Word;
+				return 3;
+			}
+			PC.Word++;
+			return 2;
+		}
+
+		static int ___29() {
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | ((HL.Word >> 7) & 0x38) | (HL.Word >> 15));
+			memPtr = (ushort)(HL.Word + 1);
+			HL.Word <<= 1;
+			return 3;
+		}
+
+		static int ___2A() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			HL.Word = VGA.PEEK16(memPtr++);
+			return 5;
+		}
+
+		static int ___2B() {
+			HL.Word--;
+			return SupIrqWaitState = 2;
+		}
+
+		static int ___2C() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++HL.Low]);
+			return 1;
+		}
+
+		static int ___2D() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--HL.Low]);
+			return 1;
+		}
+
+		static int ___2E() {
+			HL.Low = VGA.PEEK8(PC.Word++);
+			return 2;
+		}
+
+		static int ___2F() {
+			AF.Low = (byte)((AF.Low & (FLAGS_SZV | FLAG_C)) | ((AF.High ^= 0xFF) & FLAGS_53) | FLAG_H | FLAG_N);
+			return 1;
+		}
+
+		static int ___30() {
+			if ((AF.Low & FLAG_C) != 0) {
+				PC.Word++;
+				return 2;
+			}
+			PC.Word = (ushort)(PC.Word + (sbyte)VGA.PEEK8(PC.Word));
+			memPtr = ++PC.Word;
+			return 3;
+		}
+
+		static int ___31() {
+			SP.Word = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			return 3;
+		}
+
+		static int ___32() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			VGA.POKE8(memPtr++, AF.High);
+			memPtr = (ushort)((memPtr & 0xFF) | (AF.High << 8));
 			return 4;
 		}
 
-		static ushort POP() {
-			ushort ret = VGA.PEEK16(SP.Word);
+		static int ___33() {
+			SP.Word++;
+			return SupIrqWaitState = 2;
+		}
+
+		static int ___34() {
+			int x = VGA.PEEK8(HL.Word) + 1;
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[(byte)x]);
+			return 3;
+		}
+
+		static int ___35() {
+			int x = VGA.PEEK8(HL.Word) - 1;
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[(byte)x]);
+			return 3;
+		}
+
+		static int ___36() {
+			VGA.POKE8(HL.Word, VGA.PEEK8(PC.Word++));
+			return 3;
+		}
+
+		static int ___37() {
+			AF.Low = (byte)(((AF.Low & FLAGS_SZV) | (AF.High & FLAGS_53) | FLAG_C));
+			return 1;
+		}
+
+		static int ___38() {
+			if ((AF.Low & FLAG_C) != 0) {
+				PC.Word = (ushort)(PC.Word + (sbyte)VGA.PEEK8(PC.Word));
+				memPtr = ++PC.Word;
+				return 3;
+			}
+			PC.Word++;
+			return 2;
+		}
+
+		static int ___39() {
+			int z = (memPtr = HL.Word) + SP.Word, c = (memPtr++ ^ SP.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | (((HL.Word = (ushort)z) >> 8) & FLAGS_53));
+			return 3;
+		}
+		static int ___3A() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			AF.High = VGA.PEEK8(memPtr++);
+			return 4;
+		}
+
+		static int ___3B() {
+			SP.Word--;
+			return SupIrqWaitState = 2;
+		}
+
+		static int ___3C() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++AF.High]);
+			return 1;
+		}
+
+		static int ___3D() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--AF.High]);
+			return 1;
+		}
+
+		static int ___3E() {
+			AF.High = VGA.PEEK8(PC.Word++);
+			return 2;
+		}
+
+		static int ___3F() {
+			int c = AF.Low & FLAG_C;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (AF.High & FLAGS_53) | (c << 4) | (c ^ FLAG_C));
+			return 1;
+		}
+
+		static int ___41() {
+			BC.High = BC.Low;
+			return 1;
+		}
+
+		static int ___42() {
+			BC.High = DE.High;
+			return 1;
+		}
+
+		static int ___43() {
+			BC.High = DE.Low;
+			return 1;
+		}
+
+		static int ___44() {
+			BC.High = HL.High;
+			return 1;
+		}
+
+		static int ___45() {
+			BC.High = HL.Low;
+			return 1;
+		}
+
+		static int ___46() {
+			BC.High = VGA.PEEK8(HL.Word);
+			return 2;
+		}
+
+		static int ___47() {
+			BC.High = AF.High;
+			return 1;
+		}
+
+		static int ___48() {
+			BC.Low = BC.High;
+			return 1;
+		}
+
+		static int ___4A() {
+			BC.Low = DE.High;
+			return 1;
+		}
+
+		static int ___4B() {
+			BC.Low = DE.Low;
+			return 1;
+		}
+
+		static int ___4C() {
+			BC.Low = HL.High;
+			return 1;
+		}
+
+		static int ___4D() {
+			BC.Low = HL.Low;
+			return 1;
+		}
+
+		static int ___4E() {
+			BC.Low = VGA.PEEK8(HL.Word);
+			return 2;
+		}
+
+		static int ___4F() {
+			BC.Low = AF.High;
+			return 1;
+		}
+
+		static int ___50() {
+			DE.High = BC.High;
+			return 1;
+		}
+
+		static int ___51() {
+			DE.High = BC.Low;
+			return 1;
+		}
+
+		static int ___53() {
+			DE.High = DE.Low;
+			return 1;
+		}
+
+		static int ___54() {
+			DE.High = HL.High;
+			return 1;
+		}
+
+		static int ___55() {
+			DE.High = HL.Low;
+			return 1;
+		}
+
+		static int ___56() {
+			DE.High = VGA.PEEK8(HL.Word);
+			return 2;
+		}
+
+		static int ___57() {
+			DE.High = AF.High;
+			return 1;
+		}
+
+		static int ___58() {
+			DE.Low = BC.High;
+			return 1;
+		}
+
+		static int ___59() {
+			DE.Low = BC.Low;
+			return 1;
+		}
+
+		static int ___5A() {
+			DE.Low = DE.High;
+			return 1;
+		}
+
+		static int ___5C() {
+			DE.Low = HL.High;
+			return 1;
+		}
+
+		static int ___5D() {
+			DE.Low = HL.Low;
+			return 1;
+		}
+
+		static int ___5E() {
+			DE.Low = VGA.PEEK8(HL.Word);
+			return 2;
+		}
+
+		static int ___5F() {
+			DE.Low = AF.High;
+			return 1;
+		}
+
+		static int ___60() {
+			HL.High = BC.High;
+			return 1;
+		}
+
+		static int ___61() {
+			HL.High = BC.Low;
+			return 1;
+		}
+
+		static int ___62() {
+			HL.High = DE.High;
+			return 1;
+		}
+
+		static int ___63() {
+			HL.High = DE.Low;
+			return 1;
+		}
+
+		static int ___65() {
+			HL.High = HL.Low;
+			return 1;
+		}
+
+		static int ___66() {
+			HL.High = VGA.PEEK8(HL.Word);
+			return 2;
+		}
+
+		static int ___67() {
+			HL.High = AF.High;
+			return 1;
+		}
+
+		static int ___68() {
+			HL.Low = BC.High;
+			return 1;
+		}
+
+		static int ___69() {
+			HL.Low = BC.Low;
+			return 1;
+		}
+
+		static int ___6A() {
+			HL.Low = DE.High;
+			return 1;
+		}
+
+		static int ___6B() {
+			HL.Low = DE.Low;
+			return 1;
+		}
+
+		static int ___6C() {
+			HL.Low = HL.High;
+			return 1;
+		}
+
+		static int ___6E() {
+			HL.Low = VGA.PEEK8(HL.Word);
+			return 2;
+		}
+
+		static int ___6F() {
+			HL.Low = AF.High;
+			return 1;
+		}
+
+		static int ___70() {
+			VGA.POKE8(HL.Word, BC.High);
+			return 2;
+		}
+
+		static int ___71() {
+			VGA.POKE8(HL.Word, BC.Low);
+			return 2;
+		}
+
+		static int ___72() {
+			VGA.POKE8(HL.Word, DE.High);
+			return 2;
+		}
+
+		static int ___73() {
+			VGA.POKE8(HL.Word, DE.Low);
+			return 2;
+		}
+
+		static int ___74() {
+			VGA.POKE8(HL.Word, HL.High);
+			return 2;
+		}
+
+		static int ___75() {
+			VGA.POKE8(HL.Word, HL.Low);
+			return 2;
+		}
+
+		static int ___76() {
+			PC.Word--;
+			return Halt = 1;
+		}
+
+		static int ___77() {
+			VGA.POKE8(HL.Word, AF.High);
+			return 2;
+		}
+
+		static int ___78() {
+			AF.High = BC.High;
+			return 1;
+		}
+
+		static int ___79() {
+			AF.High = BC.Low;
+			return 1;
+		}
+
+		static int ___7A() {
+			AF.High = DE.High;
+			return 1;
+		}
+
+		static int ___7B() {
+			AF.High = DE.Low;
+			return 1;
+		}
+
+		static int ___7C() {
+			AF.High = HL.High;
+			return 1;
+		}
+
+		static int ___7D() {
+			AF.High = HL.Low;
+			return 1;
+		}
+
+		static int ___7E() {
+			AF.High = VGA.PEEK8(HL.Word);
+			return 2;
+		}
+
+		static int ___80() {
+			int z = AF.High + BC.High, c = AF.High ^ BC.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___81() {
+			int z = AF.High + BC.Low, c = AF.High ^ BC.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___82() {
+			int z = AF.High + DE.High, c = AF.High ^ DE.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___83() {
+			int z = AF.High + DE.Low, c = AF.High ^ DE.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___84() {
+			int z = AF.High + HL.High, c = AF.High ^ HL.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___85() {
+			int z = AF.High + HL.Low, c = AF.High ^ HL.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___86() {
+			int x = VGA.PEEK8(HL.Word), z = AF.High + x, c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 2;
+		}
+
+		static int ___87() {
+			int c = AF.High << 1;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)c] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___88() {
+			int z = AF.High + BC.High + (AF.Low & FLAG_C), c = AF.High ^ BC.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___89() {
+			int z = AF.High + BC.Low + (AF.Low & FLAG_C), c = AF.High ^ BC.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___8A() {
+			int z = AF.High + DE.High + (AF.Low & FLAG_C), c = AF.High ^ DE.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___8B() {
+			int z = AF.High + DE.Low + (AF.Low & FLAG_C), c = AF.High ^ DE.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___8C() {
+			int z = AF.High + HL.High + (AF.Low & FLAG_C), c = AF.High ^ HL.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___8D() {
+			int z = AF.High + HL.Low + (AF.Low & FLAG_C), c = AF.High ^ HL.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___8E() {
+			int x = VGA.PEEK8(HL.Word), z = AF.High + x + (AF.Low & FLAG_C), c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 2;
+		}
+
+		static int ___8F() {
+			int c = (AF.High << 1) + (AF.Low & FLAG_C);
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)c] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ___90() {
+			int z = AF.High - BC.High, c = AF.High ^ BC.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___91() {
+			int z = AF.High - BC.Low, c = AF.High ^ BC.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___92() {
+			int z = AF.High - DE.High, c = AF.High ^ DE.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___93() {
+			int z = AF.High - DE.Low, c = AF.High ^ DE.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___94() {
+			int z = AF.High - HL.High, c = AF.High ^ HL.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___95() {
+			int z = AF.High - HL.Low, c = AF.High ^ HL.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___96() {
+			int x = VGA.PEEK8(HL.Word), z = AF.High - x, c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 2;
+		}
+
+		static int ___97() {
+			AF.Word = 0x42;
+			return 1;
+		}
+
+		static int ___98() {
+			int z = AF.High - BC.High - (AF.Low & FLAG_C), c = AF.High ^ BC.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___99() {
+			int z = AF.High - BC.Low - (AF.Low & FLAG_C), c = AF.High ^ BC.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___9A() {
+			int z = AF.High - DE.High - (AF.Low & FLAG_C), c = AF.High ^ DE.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___9B() {
+			int z = AF.High - DE.Low - (AF.Low & FLAG_C), c = AF.High ^ DE.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___9C() {
+			int z = AF.High - HL.High - (AF.Low & FLAG_C), c = AF.High ^ HL.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___9D() {
+			int z = AF.High - HL.Low - (AF.Low & FLAG_C), c = AF.High ^ HL.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
+		}
+
+		static int ___9E() {
+			int x = VGA.PEEK8(HL.Word), z = AF.High - x - (AF.Low & FLAG_C), c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 2;
+		}
+
+		static int ___9F() {
+			int z = -(AF.Low & FLAG_C);
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[z & 0x190]);
+			return 1;
+		}
+
+		static int ___A0() {
+			AF.Low = TabSZYXHP[AF.High &= BC.High];
+			return 1;
+		}
+
+		static int ___A1() {
+			AF.Low = TabSZYXHP[AF.High &= BC.Low];
+			return 1;
+		}
+
+		static int ___A2() {
+			AF.Low = TabSZYXHP[AF.High &= DE.High];
+			return 1;
+		}
+
+		static int ___A3() {
+			AF.Low = TabSZYXHP[AF.High &= DE.Low];
+			return 1;
+		}
+
+		static int ___A4() {
+			AF.Low = TabSZYXHP[AF.High &= HL.High];
+			return 1;
+		}
+
+		static int ___A5() {
+			AF.Low = TabSZYXHP[AF.High &= HL.Low];
+			return 1;
+		}
+
+		static int ___A6() {
+			AF.Low = TabSZYXHP[AF.High &= VGA.PEEK8(HL.Word)];
+			return 2;
+		}
+
+		static int ___A7() {
+			AF.Low = TabSZYXHP[AF.High];
+			return 1;
+		}
+
+		static int ___A8() {
+			AF.Low = TabSZYXP[AF.High ^= BC.High];
+			return 1;
+		}
+
+		static int ___A9() {
+			AF.Low = TabSZYXP[AF.High ^= BC.Low];
+			return 1;
+		}
+
+		static int ___AA() {
+			AF.Low = TabSZYXP[AF.High ^= DE.High];
+			return 1;
+		}
+
+		static int ___AB() {
+			AF.Low = TabSZYXP[AF.High ^= DE.Low];
+			return 1;
+		}
+
+		static int ___AC() {
+			AF.Low = TabSZYXP[AF.High ^= HL.High];
+			return 1;
+		}
+
+		static int ___AD() {
+			AF.Low = TabSZYXP[AF.High ^= HL.Low];
+			return 1;
+		}
+
+		static int ___AE() {
+			AF.Low = TabSZYXP[AF.High ^= VGA.PEEK8(HL.Word)];
+			return 2;
+		}
+
+		static int ___AF() {
+			AF.Word = 0x44;
+			return 1;
+		}
+
+		static int ___B0() {
+			AF.Low = TabSZYXP[AF.High |= BC.High];
+			return 1;
+		}
+
+		static int ___B1() {
+			AF.Low = TabSZYXP[AF.High |= BC.Low];
+			return 1;
+		}
+
+		static int ___B2() {
+			AF.Low = TabSZYXP[AF.High |= DE.High];
+			return 1;
+		}
+
+		static int ___B3() {
+			AF.Low = TabSZYXP[AF.High |= DE.Low];
+			return 1;
+		}
+
+		static int ___B4() {
+			AF.Low = TabSZYXP[AF.High |= HL.High];
+			return 1;
+		}
+
+		static int ___B5() {
+			AF.Low = TabSZYXP[AF.High |= HL.Low];
+			return 1;
+		}
+
+		static int ___B6() {
+			AF.Low = TabSZYXP[AF.High |= VGA.PEEK8(HL.Word)];
+			return 2;
+		}
+
+		static int ___B7() {
+			AF.Low = TabSZYXP[AF.High];
+			return 1;
+		}
+
+		static int ___B8() {
+			int z = AF.High - BC.High;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (BC.High & FLAGS_53) | TabHVC[(AF.High ^ BC.High ^ z) & 0x190]);
+			return 1;
+		}
+
+		static int ___B9() {
+			int z = AF.High - BC.Low;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (BC.Low & FLAGS_53) | TabHVC[(AF.High ^ BC.Low ^ z) & 0x190]);
+			return 1;
+		}
+
+		static int ___BA() {
+			int z = AF.High - DE.High;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (DE.High & FLAGS_53) | TabHVC[(AF.High ^ DE.High ^ z) & 0x190]);
+			return 1;
+		}
+
+		static int ___BB() {
+			int z = AF.High - DE.Low;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (DE.Low & FLAGS_53) | TabHVC[(AF.High ^ DE.Low ^ z) & 0x190]);
+			return 1;
+		}
+
+		static int ___BC() {
+			int z = AF.High - HL.High;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (HL.High & FLAGS_53) | TabHVC[(AF.High ^ HL.High ^ z) & 0x190]);
+			return 1;
+		}
+
+		static int ___BD() {
+			int z = AF.High - HL.Low;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (HL.Low & FLAGS_53) | TabHVC[(AF.High ^ HL.Low ^ z) & 0x190]);
+			return 1;
+		}
+
+		static int ___BE() {
+			int x = VGA.PEEK8(HL.Word), z = AF.High - x;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (x & FLAGS_53) | TabHVC[(AF.High ^ x ^ z) & 0x190]);
+			return 2;
+		}
+
+		static int ___BF() {
+			AF.Low = (byte)(0x42 | (AF.High & FLAGS_53));
+			return 1;
+		}
+
+		static int ___C0() {
+			if ((AF.Low & FLAG_Z) != 0)
+				return 2;
+			else {
+				memPtr = PC.Word = VGA.PEEK16(SP.Word);
+				SP.Word += 2;
+				return 4;
+			}
+		}
+
+		static int ___C1() {
+			BC.Word = VGA.PEEK16(SP.Word);
 			SP.Word += 2;
-			return ret;
+			return 3;
 		}
 
-		static int RST(ushort adr) {
-			PUSH(PC.Word);
-			MemPtr.Word = PC.Word = adr;
-			return (4);
+		static int ___C2() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = (AF.Low & FLAG_Z) != 0 ? PC.Word += 2 : memPtr;
+			return 3;
 		}
 
-		/************
-	   * OPCODE CB *
-	   ************/
-
-		static int CB_00() {/* RLC B */
-			BC.High = RLC(CBIndex ? VGA.PEEK8(AdrCB) : BC.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.High);
-
-			return (2);
-		}
-
-		static int CB_01() {/* RLC C */
-			BC.Low = RLC(CBIndex ? VGA.PEEK8(AdrCB) : BC.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.Low);
-
-			return (2);
-		}
-
-		static int CB_02() {/* RLC D */
-			DE.High = RLC(CBIndex ? VGA.PEEK8(AdrCB) : DE.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.High);
-
-			return (2);
-		}
-
-		static int CB_03() {/* RLC E */
-			DE.Low = RLC(CBIndex ? VGA.PEEK8(AdrCB) : DE.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.Low);
-
-			return (2);
-		}
-
-
-		static int CB_04() {/* RLC H */
-			HL.High = RLC(CBIndex ? VGA.PEEK8(AdrCB) : HL.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.High);
-
-			return (2);
-		}
-
-
-		static int CB_05() {/* RLC L */
-			HL.Low = RLC(CBIndex ? VGA.PEEK8(AdrCB) : HL.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.Low);
-
-			return (2);
-		}
-
-
-		static int CB_06() {/* RLC (HL) */
-			VGA.POKE8(AdrCB, RLC(VGA.PEEK8(AdrCB)));
-			return (4);
-		}
-
-
-		static int CB_07() {/* RLC A */
-			AF.High = RLC(CBIndex ? VGA.PEEK8(AdrCB) : AF.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, AF.High);
-
-			return (2);
-		}
-
-
-		static int CB_08() {/* RRC B */
-			BC.High = RRC(CBIndex ? VGA.PEEK8(AdrCB) : BC.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.High);
-
-			return (2);
-		}
-
-
-		static int CB_09() {/* RRC C */
-			BC.Low = RRC(CBIndex ? VGA.PEEK8(AdrCB) : BC.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.Low);
-
-			return (2);
-		}
-
-
-		static int CB_0A() {/* RRC D */
-			DE.High = RRC(CBIndex ? VGA.PEEK8(AdrCB) : DE.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.High);
-
-			return (2);
-		}
-
-
-		static int CB_0B() {/* RRC E */
-			DE.Low = RRC(CBIndex ? VGA.PEEK8(AdrCB) : DE.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.Low);
-
-			return (2);
-		}
-
-
-		static int CB_0C() {/* RRC H */
-			HL.High = RRC(CBIndex ? VGA.PEEK8(AdrCB) : HL.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.High);
-
-			return (2);
-		}
-
-
-		static int CB_0D() {/* RRC L */
-			HL.Low = RRC(CBIndex ? VGA.PEEK8(AdrCB) : HL.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.Low);
-
-			return (2);
-		}
-
-
-		static int CB_0E() {/* RRC (HL) */
-			VGA.POKE8(AdrCB, RRC(VGA.PEEK8(AdrCB)));
-			return (4);
-		}
-
-
-		static int CB_0F() {/* RRC A */
-			AF.High = RRC(CBIndex ? VGA.PEEK8(AdrCB) : AF.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, AF.High);
-
-			return (2);
-		}
-
-
-		static int CB_10() {/* RL B */
-			BC.High = RL(CBIndex ? VGA.PEEK8(AdrCB) : BC.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.High);
-
-			return (2);
-		}
-
-
-		static int CB_11() {/* RL C */
-			BC.Low = RL(CBIndex ? VGA.PEEK8(AdrCB) : BC.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.Low);
-
-			return (2);
-		}
-
-
-		static int CB_12() {/* RL D */
-			DE.High = RL(CBIndex ? VGA.PEEK8(AdrCB) : DE.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.High);
-
-			return (2);
-		}
-
-
-		static int CB_13() {/* RL E */
-			DE.Low = RL(CBIndex ? VGA.PEEK8(AdrCB) : DE.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.Low);
-
-			return (2);
-		}
-
-
-		static int CB_14() {/* RL H */
-			HL.High = RL(CBIndex ? VGA.PEEK8(AdrCB) : HL.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.High);
-
-			return (2);
-		}
-
-
-		static int CB_15() {/* RL L */
-			HL.Low = RL(CBIndex ? VGA.PEEK8(AdrCB) : HL.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.Low);
-
-			return (2);
-		}
-
-
-		static int CB_16() {/* RL (HL) */
-			VGA.POKE8(AdrCB, RL(VGA.PEEK8(AdrCB)));
-			return (4);
-		}
-
-
-		static int CB_17() {/* RL A */
-			AF.High = RL(CBIndex ? VGA.PEEK8(AdrCB) : AF.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, AF.High);
-
-			return (2);
-		}
-
-
-		static int CB_18() {/* RR B */
-			BC.High = RR(CBIndex ? VGA.PEEK8(AdrCB) : BC.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.High);
-
-			return (2);
-		}
-
-
-		static int CB_19() {/* RR C */
-			BC.Low = RR(CBIndex ? VGA.PEEK8(AdrCB) : BC.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.Low);
-
-			return (2);
-		}
-
-
-		static int CB_1A() {/* RR D */
-			DE.High = RR(CBIndex ? VGA.PEEK8(AdrCB) : DE.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.High);
-
-			return (2);
-		}
-
-
-		static int CB_1B() {/* RR E */
-			DE.Low = RR(CBIndex ? VGA.PEEK8(AdrCB) : DE.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.Low);
-
-			return (2);
-		}
-
-
-		static int CB_1C() {/* RR H */
-			HL.High = RR(CBIndex ? VGA.PEEK8(AdrCB) : HL.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.High);
-
-			return (2);
-		}
-
-
-		static int CB_1D() {/* RR L */
-			HL.Low = RR(CBIndex ? VGA.PEEK8(AdrCB) : HL.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.Low);
-
-			return (2);
-		}
-
-
-		static int CB_1E() {/* RR (HL) */
-			VGA.POKE8(AdrCB, RR(VGA.PEEK8(AdrCB)));
-			return (4);
-		}
-
-
-		static int CB_1F() {/* RR A */
-			AF.High = RR(CBIndex ? VGA.PEEK8(AdrCB) : AF.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, AF.High);
-
-			return (2);
-		}
-
-
-		static int CB_20() {/* SLA B */
-			BC.High = SLA(CBIndex ? VGA.PEEK8(AdrCB) : BC.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.High);
-
-			return (2);
-		}
-
-
-		static int CB_21() {/* SLA C */
-			BC.Low = SLA(CBIndex ? VGA.PEEK8(AdrCB) : BC.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.Low);
-
-			return (2);
-		}
-
-
-		static int CB_22() {/* SLA D */
-			DE.High = SLA(CBIndex ? VGA.PEEK8(AdrCB) : DE.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.High);
-
-			return (2);
-		}
-
-
-		static int CB_23() {/* SLA E */
-			DE.Low = SLA(CBIndex ? VGA.PEEK8(AdrCB) : DE.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.Low);
-
-			return (2);
-		}
-
-
-		static int CB_24() {/* SLA H */
-			HL.High = SLA(CBIndex ? VGA.PEEK8(AdrCB) : HL.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.High);
-
-			return (2);
-		}
-
-
-		static int CB_25() {/* SLA L */
-			HL.Low = SLA(CBIndex ? VGA.PEEK8(AdrCB) : HL.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.Low);
-
-			return (2);
-		}
-
-
-		static int CB_26() {/* SLA (HL) */
-			VGA.POKE8(AdrCB, SLA(VGA.PEEK8(AdrCB)));
-			return (4);
-		}
-
-
-		static int CB_27() {/* SLA A */
-			AF.High = SLA(CBIndex ? VGA.PEEK8(AdrCB) : AF.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, AF.High);
-
-			return (2);
-		}
-
-
-		static int CB_28() {/* SRA B */
-			BC.High = SRA(CBIndex ? VGA.PEEK8(AdrCB) : BC.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.High);
-
-			return (2);
-		}
-
-
-		static int CB_29() {/* SRA C */
-			BC.Low = SRA(CBIndex ? VGA.PEEK8(AdrCB) : BC.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.Low);
-
-			return (2);
-		}
-
-
-		static int CB_2A() {/* SRA D */
-			DE.High = SRA(CBIndex ? VGA.PEEK8(AdrCB) : DE.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.High);
-
-			return (2);
-		}
-
-
-		static int CB_2B() {/* SRA E */
-			DE.Low = SRA(CBIndex ? VGA.PEEK8(AdrCB) : DE.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.Low);
-
-			return (2);
-		}
-
-
-		static int CB_2C() {/* SRA H */
-			HL.High = SRA(CBIndex ? VGA.PEEK8(AdrCB) : HL.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.High);
-
-			return (2);
-		}
-
-
-		static int CB_2D() {/* SRA L */
-			HL.Low = SRA(CBIndex ? VGA.PEEK8(AdrCB) : HL.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.Low);
-
-			return (2);
-		}
-
-
-		static int CB_2E() {/* SRA (HL) */
-			VGA.POKE8(AdrCB, SRA(VGA.PEEK8(AdrCB)));
-			return (4);
-		}
-
-
-		static int CB_2F() {/* SRA A */
-			AF.High = SRA(CBIndex ? VGA.PEEK8(AdrCB) : AF.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, AF.High);
-
-			return (2);
-		}
-
-
-		static int CB_30() {/* SLL B */
-			BC.High = SLL(CBIndex ? VGA.PEEK8(AdrCB) : BC.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.High);
-
-			return (2);
-		}
-
-
-		static int CB_31() {/* SLL C */
-			BC.Low = SLL(CBIndex ? VGA.PEEK8(AdrCB) : BC.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.Low);
-
-			return (2);
-		}
-
-
-		static int CB_32() {/* SLL D */
-			DE.High = SLL(CBIndex ? VGA.PEEK8(AdrCB) : DE.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.High);
-
-			return (2);
-		}
-
-
-		static int CB_33() {/* SLL E */
-			DE.Low = SLL(CBIndex ? VGA.PEEK8(AdrCB) : DE.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.Low);
-
-			return (2);
-		}
-
-
-		static int CB_34() {/* SLL H */
-			HL.High = SLL(CBIndex ? VGA.PEEK8(AdrCB) : HL.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.High);
-
-			return (2);
-		}
-
-
-		static int CB_35() {/* SLL L */
-			HL.Low = SLL(CBIndex ? VGA.PEEK8(AdrCB) : HL.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.Low);
-
-			return (2);
-		}
-
-
-		static int CB_36() {/* SLL (HL) */
-			VGA.POKE8(AdrCB, SLL(VGA.PEEK8(AdrCB)));
-			return (4);
-		}
-
-
-		static int CB_37() {/* SLL A */
-			AF.High = SLL(CBIndex ? VGA.PEEK8(AdrCB) : AF.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, AF.High);
-
-			return (2);
-		}
-
-
-		static int CB_38() {/* SRL B */
-			BC.High = SRL(CBIndex ? VGA.PEEK8(AdrCB) : BC.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.High);
-
-			return (2);
-		}
-
-
-		static int CB_39() {/* SRL C */
-			BC.Low = SRL(CBIndex ? VGA.PEEK8(AdrCB) : BC.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, BC.Low);
-
-			return (2);
-		}
-
-
-		static int CB_3A() {/* SRL D */
-			DE.High = SRL(CBIndex ? VGA.PEEK8(AdrCB) : DE.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.High);
-
-			return (2);
-		}
-
-
-		static int CB_3B() {/* SRL E */
-			DE.Low = SRL(CBIndex ? VGA.PEEK8(AdrCB) : DE.Low);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, DE.Low);
-
-			return (2);
-		}
-
-
-		static int CB_3C() {/* SRL H */
-			HL.High = SRL(CBIndex ? VGA.PEEK8(AdrCB) : HL.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.High);
-
-			return (2);
-		}
-
-
-		static int CB_3D() {/* SRL L */
-			if (CBIndex)
-				VGA.POKE8(AdrCB, HL.Low);
-
-			return (2);
-		}
-
-
-		static int CB_3E() {/* SRL (HL) */
-			VGA.POKE8(AdrCB, SRL(VGA.PEEK8(AdrCB)));
-			return (4);
-		}
-
-
-		static int CB_3F() {/* SRL A */
-			AF.High = SRL(CBIndex ? VGA.PEEK8(AdrCB) : AF.High);
-			if (CBIndex)
-				VGA.POKE8(AdrCB, AF.High);
-
-			return (2);
-		}
-
-
-		static int CB_40() {/* BIT 0, B */
-			return Bit(BC.High, BIT0);
-		}
-
-
-		static int CB_41() {/* BIT 0, C */
-			return Bit(BC.Low, BIT0);
-		}
-
-
-		static int CB_42() {/* BIT 0, D */
-			return Bit(DE.High, BIT0);
-		}
-
-
-		static int CB_43() {/* BIT 0, E */
-			return Bit(DE.Low, BIT0);
-		}
-
-
-		static int CB_44() {/* BIT 0, H */
-			return Bit(HL.High, BIT0);
-		}
-
-
-		static int CB_45() {/* BIT 0, L */
-			return Bit(HL.Low, BIT0);
-		}
-
-
-		static int CB_46() {/* BIT 0, (HL) */
-			Bit(VGA.PEEK8(AdrCB), BIT0);
-			AF.Low &= N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)(MemPtr.High & (FLAG_5 | FLAG_3));
-			return (3);
-		}
-
-
-		static int CB_47() {/* BIT 0, A */
-			return Bit(AF.High, BIT0);
-		}
-
-
-		static int CB_48() {/* BIT 1, B */
-			return Bit(BC.High, BIT1);
-		}
-
-
-		static int CB_49() {/* BIT 1, C */
-			return Bit(BC.Low, BIT1);
-		}
-
-
-		static int CB_4A() {/* BIT 1, D */
-			return Bit(DE.High, BIT1);
-		}
-
-
-		static int CB_4B() {/* BIT 1, E */
-			return Bit(DE.Low, BIT1);
-		}
-
-
-		static int CB_4C() {/* BIT 1, H */
-			return Bit(HL.High, BIT1);
-		}
-
-
-		static int CB_4D() {/* BIT 1, L */
-			return Bit(HL.Low, BIT1);
-		}
-
-
-		static int CB_4E() {/* BIT 1, (HL) */
-			Bit(VGA.PEEK8(AdrCB), BIT1);
-			AF.Low &= N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)(MemPtr.High & (FLAG_5 | FLAG_3));
-			return (3);
-		}
-
-
-		static int CB_4F() {/* BIT 1, A */
-			return Bit(AF.High, BIT1);
-		}
-
-
-		static int CB_50() {/* BIT 2, B */
-			return Bit(BC.High, BIT2);
-		}
-
-
-		static int CB_51() {/* BIT 2, C */
-			return Bit(BC.Low, BIT2);
-		}
-
-
-		static int CB_52() {/* BIT 2, D */
-			return Bit(DE.High, BIT2);
-		}
-
-
-		static int CB_53() {/* BIT 2, E */
-			return Bit(DE.Low, BIT2);
-		}
-
-
-		static int CB_54() {/* BIT 2, H */
-			return Bit(HL.High, BIT2);
-		}
-
-
-		static int CB_55() {/* BIT 2, L */
-			return Bit(HL.Low, BIT2);
-		}
-
-
-		static int CB_56() {/* BIT 2, (HL) */
-			Bit(VGA.PEEK8(AdrCB), BIT2);
-			AF.Low &= N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)(MemPtr.High & (FLAG_5 | FLAG_3));
-			return (3);
-		}
-
-
-		static int CB_57() {/* BIT 2, A */
-			return Bit(AF.High, BIT2);
-		}
-
-
-		static int CB_58() {/* BIT 3, B */
-			return Bit(BC.High, BIT3);
-		}
-
-
-		static int CB_59() {/* BIT 3, C */
-			return Bit(BC.Low, BIT3);
-		}
-
-
-		static int CB_5A() {/* BIT 3, D */
-			return Bit(DE.High, BIT3);
-		}
-
-
-		static int CB_5B() {/* BIT 3, E */
-			return Bit(DE.Low, BIT3);
-		}
-
-
-		static int CB_5C() {/* BIT 3, H */
-			return Bit(HL.High, BIT3);
-		}
-
-
-		static int CB_5D() {/* BIT 3, L */
-			return Bit(HL.Low, BIT3);
-		}
-
-
-		static int CB_5E() {/* BIT 3, (HL) */
-			Bit(VGA.PEEK8(AdrCB), BIT3);
-			AF.Low &= N_FLAG_5 & N_FLAG_3; ;
-			AF.Low |= (byte)(MemPtr.High & (FLAG_5 | FLAG_3));
-			return (3);
-		}
-
-
-		static int CB_5F() {/* BIT 3, A */
-			return Bit(AF.High, BIT3);
-		}
-
-
-		static int CB_60() {/* BIT 4, B */
-			return Bit(BC.High, BIT4);
-		}
-
-
-		static int CB_61() {/* BIT 4, C */
-			return Bit(BC.Low, BIT4);
-		}
-
-
-		static int CB_62() {/* BIT 4, D */
-			return Bit(DE.High, BIT4);
-		}
-
-
-		static int CB_63() {/* BIT 4, E */
-			return Bit(DE.Low, BIT4);
-		}
-
-
-		static int CB_64() {/* BIT 4, H */
-			return Bit(HL.High, BIT4);
-		}
-
-
-		static int CB_65() {/* BIT 4, L */
-			return Bit(HL.Low, BIT4);
-		}
-
-
-		static int CB_66() {/* BIT 4, (HL) */
-			Bit(VGA.PEEK8(AdrCB), BIT4);
-			AF.Low &= N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)(MemPtr.High & (FLAG_5 | FLAG_3));
-			return (3);
-		}
-
-
-		static int CB_67() {/* BIT 4, A */
-			return Bit(AF.High, BIT4);
-		}
-
-
-		static int CB_68() {/* BIT 5, B */
-			return Bit(BC.High, BIT5);
-		}
-
-
-		static int CB_69() {/* BIT 5, C */
-			return Bit(BC.Low, BIT5);
-		}
-
-
-		static int CB_6A() {/* BIT 5, D */
-			return Bit(DE.High, BIT5);
-		}
-
-
-		static int CB_6B() {/* BIT 5, E */
-			return Bit(DE.Low, BIT5);
-		}
-
-
-		static int CB_6C() {/* BIT 5, H */
-			return Bit(HL.High, BIT5);
-		}
-
-
-		static int CB_6D() {/* BIT 5, L */
-			return Bit(HL.Low, BIT5);
-		}
-
-
-		static int CB_6E() {/* BIT 5, (HL) */
-			Bit(VGA.PEEK8(AdrCB), BIT5);
-			AF.Low &= N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)(MemPtr.High & (FLAG_5 | FLAG_3));
-			return (3);
-		}
-
-
-		static int CB_6F() {/* BIT 5, A */
-			return Bit(AF.High, BIT5);
-		}
-
-
-		static int CB_70() {/* BIT 6, B */
-			return Bit(BC.High, BIT6);
-		}
-
-
-		static int CB_71() {/* BIT 6, C */
-			return Bit(BC.Low, BIT6);
-		}
-
-
-		static int CB_72() {/* BIT 6, D */
-			return Bit(DE.High, BIT6);
-		}
-
-
-		static int CB_73() {/* BIT 6, E */
-			return Bit(DE.Low, BIT6);
-		}
-
-
-		static int CB_74() {/* BIT 6, H */
-			return Bit(HL.High, BIT6);
-		}
-
-
-		static int CB_75() {/* BIT 6, L */
-			return Bit(HL.Low, BIT6);
-		}
-
-
-		static int CB_76() {/* BIT 6, (HL) */
-			Bit(VGA.PEEK8(AdrCB), BIT6);
-			AF.Low &= N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)(MemPtr.High & (FLAG_5 | FLAG_3));
-			return (3);
-		}
-
-
-		static int CB_77() {/* BIT 6, A */
-			return Bit(AF.High, BIT6);
-		}
-
-
-		static int CB_78() {/* BIT 7, B */
-			return Bit(BC.High, BIT7);
-		}
-
-
-		static int CB_79() {/* BIT 7, C */
-			return Bit(BC.Low, BIT7);
-		}
-
-
-		static int CB_7A() {/* BIT 7, D */
-			return Bit(DE.High, BIT7);
-		}
-
-
-		static int CB_7B() {/* BIT 7, E */
-			return Bit(DE.Low, BIT7);
-		}
-
-
-		static int CB_7C() {/* BIT 7, H */
-			return Bit(HL.High, BIT7);
-		}
-
-
-		static int CB_7D() {/* BIT 7, L */
-			return Bit(HL.Low, BIT7);
-		}
-
-
-		static int CB_7E() {/* BIT 7, (HL) */
-			Bit(VGA.PEEK8(AdrCB), BIT7);
-			AF.Low &= N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)(MemPtr.High & (FLAG_5 | FLAG_3));
-			return (3);
-		}
-
-
-		static int CB_7F() {/* BIT 7, A */
-			return Bit(AF.High, BIT7);
-		}
-
-		static int CB_80() {/* RES 0, B */
-			return (Res(ref BC.High, BIT0));
-		}
-
-
-		static int CB_81() {/* RES 0, C */
-			return (Res(ref BC.Low, BIT0));
-		}
-
-
-		static int CB_82() {/* RES 0, D */
-			return (Res(ref DE.High, BIT0));
-		}
-
-
-		static int CB_83() {/* RES 0, E */
-			return (Res(ref DE.Low, BIT0));
-		}
-
-
-		static int CB_84() {/* RES 0, H */
-			return (Res(ref HL.High, BIT0));
-		}
-
-
-		static int CB_85() {/* RES 0, L */
-			return (Res(ref HL.Low, BIT0));
-		}
-
-
-		static int CB_86() {/* RES 0, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) & ~BIT0));
-			return (4);
-		}
-
-
-		static int CB_87() {/* RES 0, A */
-			return (Res(ref AF.High, BIT0));
-		}
-
-
-		static int CB_88() {/* RES 1, B */
-			return (Res(ref BC.High, BIT1));
-		}
-
-
-		static int CB_89() {/* RES 1, C */
-			return (Res(ref BC.Low, BIT1));
-		}
-
-
-		static int CB_8A() {/* RES 1, D */
-			return (Res(ref DE.High, BIT1));
-		}
-
-
-		static int CB_8B() {/* RES 1, E */
-			return (Res(ref DE.Low, BIT1));
-		}
-
-
-		static int CB_8C() {/* RES 1, H */
-			return (Res(ref HL.High, BIT1));
-		}
-
-
-		static int CB_8D() {/* RES 1, L */
-			return (Res(ref HL.Low, BIT1));
-		}
-
-
-		static int CB_8E() {/* RES 1, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) & ~BIT1));
-			return (4);
-		}
-
-
-		static int CB_8F() {/* RES 1, A */
-			return (Res(ref AF.High, BIT1));
-		}
-
-
-		static int CB_90() {/* RES 2, B */
-			return (Res(ref BC.High, BIT2));
-		}
-
-
-		static int CB_91() {/* RES 2, C */
-			return (Res(ref BC.Low, BIT2));
-		}
-
-
-		static int CB_92() {/* RES 2, D */
-			return (Res(ref DE.High, BIT2));
-		}
-
-
-		static int CB_93() {/* RES 2, E */
-			return (Res(ref DE.Low, BIT2));
-		}
-
-
-		static int CB_94() {/* RES 2, H */
-			return (Res(ref HL.High, BIT2));
-		}
-
-
-		static int CB_95() {/* RES 2, L */
-			return (Res(ref HL.Low, BIT2));
-		}
-
-
-		static int CB_96() {/* RES 2, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) & ~BIT2));
-			return (4);
-		}
-
-
-		static int CB_97() {/* RES 2, A */
-			return (Res(ref AF.High, BIT2));
-		}
-
-
-		static int CB_98() {/* RES 3, B */
-			return (Res(ref BC.High, BIT3));
-		}
-
-
-		static int CB_99() {/* RES 3, C */
-			return (Res(ref BC.Low, BIT3));
-		}
-
-
-		static int CB_9A() {/* RES 3, D */
-			return (Res(ref DE.High, BIT3));
-		}
-
-
-		static int CB_9B() {/* RES 3, E */
-			return (Res(ref DE.Low, BIT3));
-		}
-
-
-		static int CB_9C() {/* RES 3, H */
-			return (Res(ref HL.High, BIT3));
-		}
-
-
-		static int CB_9D() {/* RES 3, L */
-			return (Res(ref HL.Low, BIT3));
-		}
-
-
-		static int CB_9E() {/* RES 3, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) & ~BIT3));
-			return (4);
-		}
-
-
-		static int CB_9F() {/* RES 3, A */
-			return (Res(ref AF.High, BIT3));
-		}
-
-
-		static int CB_A0() {/* RES 4, B */
-			return (Res(ref BC.High, BIT4));
-		}
-
-
-		static int CB_A1() {/* RES 4, C */
-			return (Res(ref BC.Low, BIT4));
-		}
-
-
-		static int CB_A2() {/* RES 4, D */
-			return (Res(ref DE.High, BIT4));
-		}
-
-
-		static int CB_A3() {/* RES 4, E */
-			return (Res(ref DE.Low, BIT4));
-		}
-
-
-		static int CB_A4() {/* RES 4, H */
-			return (Res(ref HL.High, BIT4));
-		}
-
-
-		static int CB_A5() {/* RES 4, L */
-			return (Res(ref HL.Low, BIT4));
-		}
-
-
-		static int CB_A6() {/* RES 4, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) & ~BIT4));
-			return (4);
-		}
-
-
-		static int CB_A7() {/* RES 4, A */
-			return (Res(ref AF.High, BIT4));
-		}
-
-
-		static int CB_A8() {/* RES 5, B */
-			return (Res(ref BC.High, BIT5));
-		}
-
-
-		static int CB_A9() {/* RES 5, C */
-			return (Res(ref BC.Low, BIT5));
-		}
-
-
-		static int CB_AA() {/* RES 5, D */
-			return (Res(ref DE.High, BIT5));
-		}
-
-
-		static int CB_AB() {/* RES 5, E */
-			return (Res(ref DE.Low, BIT5));
-		}
-
-
-		static int CB_AC() {/* RES 5, H */
-			return (Res(ref HL.High, BIT5));
-		}
-
-
-		static int CB_AD() {/* RES 5, L */
-			return (Res(ref HL.Low, BIT5));
-		}
-
-
-		static int CB_AE() {/* RES 5, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) & ~BIT5));
-			return (4);
+		static int ___C3() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = memPtr;
+			return 3;
 		}
-
-
-		static int CB_AF() {/* RES 5, A */
-			return (Res(ref AF.High, BIT5));
-		}
-
-
-		static int CB_B0() {/* RES 6, B */
-			return (Res(ref BC.High, BIT6));
-		}
-
-
-		static int CB_B1() {/* RES 6, C */
-			return (Res(ref BC.Low, BIT6));
-		}
-
-
-		static int CB_B2() {/* RES 6, D */
-			return (Res(ref DE.High, BIT6));
-		}
-
-
-		static int CB_B3() {/* RES 6, E */
-			return (Res(ref DE.Low, BIT6));
-		}
-
-
-		static int CB_B4() {/* RES 6, H */
-			return (Res(ref HL.High, BIT6));
-		}
-
-
-		static int CB_B5() {/* RES 6, L */
-			return (Res(ref HL.Low, BIT6));
-		}
-
-
-		static int CB_B6() {/* RES 6, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) & ~BIT6));
-			return (4);
-		}
-
-
-		static int CB_B7() {/* RES 6, A */
-			return (Res(ref AF.High, BIT6));
-		}
-
-
-		static int CB_B8() {/* RES 7, B */
-			return (Res(ref BC.High, BIT7));
-		}
-
-
-		static int CB_B9() {/* RES 7, C */
-			return (Res(ref BC.Low, BIT7));
-		}
-
-
-		static int CB_BA() {/* RES 7, D */
-			return (Res(ref DE.High, BIT7));
-		}
-
-
-		static int CB_BB() {/* RES 7, E */
-			return (Res(ref DE.Low, BIT7));
-		}
-
-
-		static int CB_BC() {/* RES 7, H */
-			return (Res(ref HL.High, BIT7));
-		}
-
-
-		static int CB_BD() {/* RES 7, L */
-			return (Res(ref HL.Low, BIT7));
-		}
-
-
-		static int CB_BE() {/* RES 7, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) & ~BIT7));
-			return (4);
-		}
-
-
-		static int CB_BF() {/* RES 7, A */
-			return (Res(ref AF.High, BIT7));
-		}
-
-
-		static int CB_C0() {/* SET 0, B */
-			return (Set(ref BC.High, BIT0));
-		}
-
-
-		static int CB_C1() {/* SET 0, C */
-			return (Set(ref BC.Low, BIT0));
-		}
-
-
-		static int CB_C2() {/* SET 0, D */
-			return (Set(ref DE.High, BIT0));
-		}
-
-
-		static int CB_C3() {/* SET 0, E */
-			return (Set(ref DE.Low, BIT0));
-		}
-
-
-		static int CB_C4() {/* SET 0, H */
-			return (Set(ref HL.High, BIT0));
-		}
-
-
-		static int CB_C5() {/* SET 0, L */
-			return (Set(ref HL.Low, BIT0));
-		}
-
-
-		static int CB_C6() {/* SET 0, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) | BIT0));
-			return (4);
-		}
-
-
-		static int CB_C7() {/* SET 0, A */
-			return (Set(ref AF.High, BIT0));
-		}
-
-
-		static int CB_C8() {/* SET 1, B */
-			return (Set(ref BC.High, BIT1));
-		}
-
-
-		static int CB_C9() {/* SET 1, C */
-			return (Set(ref BC.Low, BIT1));
-		}
-
-
-		static int CB_CA() {/* SET 1, D */
-			return (Set(ref DE.High, BIT1));
-		}
-
-
-		static int CB_CB() {/* SET 1, E */
-			return (Set(ref DE.Low, BIT1));
-		}
-
-
-		static int CB_CC() {/* SET 1, H */
-			return (Set(ref HL.High, BIT1));
-		}
-
-
-		static int CB_CD() {/* SET 1, L */
-			return (Set(ref HL.Low, BIT1));
-		}
-
-
-		static int CB_CE() {/* SET 1, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) | BIT1));
-			return (4);
-		}
-
-
-		static int CB_CF() {/* SET 1, A */
-			return (Set(ref AF.High, BIT1));
-		}
-
-
-		static int CB_D0() {/* SET 2, B */
-			return (Set(ref BC.High, BIT2));
-		}
-
-
-		static int CB_D1() {/* SET 2, C */
-			return (Set(ref BC.Low, BIT2));
-		}
-
-
-		static int CB_D2() {/* SET 2, D */
-			return (Set(ref DE.High, BIT2));
-		}
-
-
-		static int CB_D3() {/* SET 2, E */
-			return (Set(ref DE.Low, BIT2));
-		}
-
-
-		static int CB_D4() {/* SET 2, H */
-			return (Set(ref HL.High, BIT2));
-		}
-
-
-		static int CB_D5() {/* SET 2, L */
-			return (Set(ref HL.Low, BIT2));
-		}
-
-
-		static int CB_D6() {/* SET 2, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) | BIT2));
-			return (4);
-		}
-
-
-		static int CB_D7() {/* SET 2, A */
-			return (Set(ref AF.High, BIT2));
-		}
-
-
-		static int CB_D8() {/* SET 3, B */
-			return (Set(ref BC.High, BIT3));
-		}
-
-
-		static int CB_D9() {/* SET 3, C */
-			return (Set(ref BC.Low, BIT3));
-		}
-
-
-		static int CB_DA() {/* SET 3, D */
-			return (Set(ref DE.High, BIT3));
-		}
-
-
-		static int CB_DB() {/* SET 3, E */
-			return (Set(ref DE.Low, BIT3));
-		}
-
-
-		static int CB_DC() {/* SET 3, H */
-			return (Set(ref HL.High, BIT3));
-		}
-
-
-		static int CB_DD() {/* SET 3, L */
-			return (Set(ref HL.Low, BIT3));
-		}
-
-
-		static int CB_DE() {/* SET 3, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) | BIT3));
-			return (4);
-		}
-
-
-		static int CB_DF() {/* SET 3, A */
-			return (Set(ref AF.High, BIT3));
-		}
-
-
-		static int CB_E0() {/* SET 4, B */
-			return (Set(ref BC.High, BIT4));
-		}
-
-
-		static int CB_E1() {/* SET 4, C */
-			return (Set(ref BC.Low, BIT4));
-		}
-
-
-		static int CB_E2() {/* SET 4, D */
-			return (Set(ref DE.High, BIT4));
-		}
-
-
-		static int CB_E3() {/* SET 4, E */
-			return (Set(ref DE.Low, BIT4));
-		}
-
-
-		static int CB_E4() {/* SET 4, H */
-			return (Set(ref HL.High, BIT4));
-		}
-
-
-		static int CB_E5() {/* SET 4, L */
-			return (Set(ref HL.Low, BIT4));
-		}
-
-
-		static int CB_E6() {/* SET 4, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) | BIT4));
-			return (4);
-		}
-
-
-		static int CB_E7() {/* SET 4, A */
-			return (Set(ref AF.High, BIT4));
-		}
-
-
-		static int CB_E8() {/* SET 5, B */
-			return (Set(ref BC.High, BIT5));
-		}
-
-
-		static int CB_E9() {/* SET 5, C */
-			return (Set(ref BC.Low, BIT5));
-		}
-
-
-		static int CB_EA() {/* SET 5, D */
-			return (Set(ref DE.High, BIT5));
-		}
-
-
-		static int CB_EB() {/* SET 5, E */
-			return (Set(ref DE.Low, BIT5));
-		}
-
-
-		static int CB_EC() {/* SET 5, H */
-			return (Set(ref HL.High, BIT5));
-		}
-
-
-		static int CB_ED() {/* SET 5, L */
-			return (Set(ref HL.Low, BIT5));
-		}
-
-
-		static int CB_EE() {/* SET 5, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) | BIT5));
-			return (4);
-		}
-
-
-		static int CB_EF() {/* SET 5, A */
-			return (Set(ref AF.High, BIT5));
-		}
-
-
-		static int CB_F0() {/* SET 6, B */
-			return (Set(ref BC.High, BIT6));
-		}
-
-
-		static int CB_F1() {/* SET 6, C */
-			return (Set(ref BC.Low, BIT6));
-		}
-
-
-		static int CB_F2() {/* SET 6, D */
-			return (Set(ref DE.High, BIT6));
-		}
-
-
-		static int CB_F3() {/* SET 6, E */
-			return (Set(ref DE.Low, BIT6));
-		}
-
-
-		static int CB_F4() {/* SET 6, H */
-			return (Set(ref HL.High, BIT6));
-		}
-
-
-		static int CB_F5() {/* SET 6, L */
-			return (Set(ref HL.Low, BIT6));
-		}
-
-
-		static int CB_F6() {/* SET 6, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) | BIT6));
-			return (4);
-		}
-
-
-		static int CB_F7() {/* SET 6, A */
-			return (Set(ref AF.High, BIT6));
-		}
-
-
-		static int CB_F8() {/* SET 7, B */
-			return (Set(ref BC.High, BIT7));
-		}
-
-
-		static int CB_F9() {/* SET 7, C */
-			return (Set(ref BC.Low, BIT7));
-		}
-
-
-		static int CB_FA() {/* SET 7, D */
-			return (Set(ref DE.High, BIT7));
-		}
-
-
-		static int CB_FB() {/* SET 7, E */
-			return (Set(ref DE.Low, BIT7));
-		}
-
-
-		static int CB_FC() {/* SET 7, H */
-			return (Set(ref HL.High, BIT7));
-		}
-
-
-		static int CB_FD() {/* SET 7, L */
-			return (Set(ref HL.Low, BIT7));
-		}
-
-
-		static int CB_FE() {/* SET 7, ( HL ) */
-			VGA.POKE8(AdrCB, (byte)(VGA.PEEK8(AdrCB) | BIT7));
-			return (4);
-		}
-
-
-		static int CB_FF() {/* SET 7, A */
-			return (Set(ref AF.High, BIT7));
-		}
-
-
-		/************
-	   * OPCODE ED *
-	   ************/
-
-		static int ed___() {
-			return (2);
-		}
-
-
-		static int ED_40() {/* IN B, ( C ) */
-			BC.High = (byte)GestPort.ReadPort(BC.Word);
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[BC.High]);
-			return (4);
-		}
-
-
-		static int ED_41() {/* OUT ( C ), B */
-			GestPort.WritePort(BC.Word, BC.High);
-			return (4);
-		}
-
-
-		static int ED_42() {/* SBC HL, BC */
-			return SBC_R16(BC.Word);
-		}
-
 
-		static int ED_43() {/* LD ( nnnn ), BC */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			VGA.POKE16(MemPtr.Word, BC.Word);
-			MemPtr.Word++;
+		static int ___C4() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (6);
+			if ((AF.Low & FLAG_Z) != 0)
+				return 3;
+			else {
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				PC.Word = memPtr;
+				return 5;
+			}
 		}
 
-
-		static int ED_44() {/* NEG */
-			int a = AF.High;
-			AF.High = 0;
-			SUB_R8(a, 0);
-			return (2);
+		static int ___C5() {
+			SP.Word -= 2;
+			VGA.POKE16(SP.Word, BC.Word);
+			return 4;
 		}
 
-
-		static int ED_45() {/* RETN */
-			IFF1 = IFF2;
-			MemPtr.Word = PC.Word = POP();
-			return (4);
+		static int ___C6() {
+			int x = VGA.PEEK8(PC.Word++), z = AF.High + x, c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 2;
 		}
 
-
-		static int ED_46() {/* IM 0 */
-			InterruptMode = 0;
-			ed___();
-			return (2);
+		static int ___C7() {
+			SP.Word -= 2;
+			VGA.POKE16(SP.Word, PC.Word);
+			memPtr = PC.Word = (ushort)(LastInstr & 0x38);
+			return 4;
 		}
 
-
-		static int ED_47() {/* LD I, A */
-			IR.High = AF.High;
-			SupIrqWaitState = 1;
-			return (3);
+		static int ___C8() {
+			if ((AF.Low & FLAG_Z) != 0) {
+				memPtr = PC.Word = VGA.PEEK16(SP.Word);
+				SP.Word += 2;
+				return 4;
+			}
+			return 2;
 		}
 
-
-		static int ED_48() {/* IN C, ( C ) */
-			BC.Low = (byte)GestPort.ReadPort(BC.Word);
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[BC.Low]);
-			return (4);
+		static int ___C9() {
+			memPtr = PC.Word = VGA.PEEK16(SP.Word);
+			SP.Word += 2;
+			return 3;
 		}
 
-
-		static int ED_49() {/* OUT ( C ), C */
-			GestPort.WritePort(BC.Word, BC.Low);
-			return (4);
+		static int ___CA() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = (ushort)((AF.Low & FLAG_Z) != 0 ? memPtr : PC.Word + 2);
+			return 3;
 		}
 
-
-		static int ED_4A() {/* ADC HL, BC */
-			return ADC_R16(BC.Word);
+		static int ___CB() {
+			IR.Low ^= (byte)(((IR.Low + 1) ^ IR.Low) & 0x7F);
+			return TabInstrCB[LastInstr = VGA.PEEK8(PC.Word++)]();
 		}
 
+		static int CB_00() {
+			int x = BC.High << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[BC.High = (byte)(x | c)] | c);
+			return 2;
+		}
 
-		static int ED_4B() {/* LD BC, ( nnnn ) */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			BC.Word = VGA.PEEK16(MemPtr.Word);
-			MemPtr.Word++;
+		static int CB_01() {
+			int x = BC.Low << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[BC.Low = (byte)(x | c)] | c);
+			return 2;
+		}
+
+		static int CB_02() {
+			int x = DE.High << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[DE.High = (byte)(x | c)] | c);
+			return 2;
+		}
+
+		static int CB_03() {
+			int x = DE.Low << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[DE.Low = (byte)(x | c)] | c);
+			return 2;
+		}
+
+		static int CB_04() {
+			int x = HL.High << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[HL.High = (byte)(x | c)] | c);
+			return 2;
+		}
+
+		static int CB_05() {
+			int x = HL.Low << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[HL.Low = (byte)(x | c)] | c);
+			return 2;
+		}
+
+		static int CB_06() {
+			int x = VGA.PEEK8(HL.Word) << 1, c = x >> 8;
+			x |= c;
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x & 0xFF] | c);
+			return 4;
+		}
+
+		static int CB_07() {
+			int x = AF.High << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)(x | c)] | c);
+			return 2;
+		}
+
+		static int CB_08() {
+			int c = BC.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[BC.High = (byte)((BC.High >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int CB_09() {
+			int c = BC.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[BC.Low = (byte)((BC.Low >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int CB_0A() {
+			int c = DE.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[DE.High = (byte)((DE.High >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int CB_0B() {
+			int c = DE.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[DE.Low = (byte)((DE.Low >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int CB_0C() {
+			int c = HL.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[HL.High = (byte)((HL.High >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int CB_0D() {
+			int c = HL.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[HL.Low = (byte)((HL.Low >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int CB_0E() {
+			int x = VGA.PEEK8(HL.Word), c = x & 1;
+			x = (x >>= 1) | (c << 7);
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)(TabSZYXP[(byte)x] | c);
+			return 4;
+		}
+
+		static int CB_0F() {
+			int c = AF.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)((AF.High >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int CB_10() {
+			int x = (AF.Low & FLAG_C) | BC.High << 1;
+			AF.Low = (byte)(TabSZYXP[BC.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_11() {
+			int x = (AF.Low & FLAG_C) | BC.Low << 1;
+			AF.Low = (byte)(TabSZYXP[BC.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_12() {
+			int x = (AF.Low & FLAG_C) | DE.High << 1;
+			AF.Low = (byte)(TabSZYXP[DE.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_13() {
+			int x = (AF.Low & FLAG_C) | DE.Low << 1;
+			AF.Low = (byte)(TabSZYXP[DE.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_14() {
+			int x = (AF.Low & FLAG_C) | HL.High << 1;
+			AF.Low = (byte)(TabSZYXP[HL.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_15() {
+			int x = (AF.Low & FLAG_C) | HL.Low << 1;
+			AF.Low = (byte)(TabSZYXP[HL.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_16() {
+			int x = (AF.Low & FLAG_C) | VGA.PEEK8(HL.Word) << 1;
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x & 0xFF] | (x >> 8));
+			return 4;
+		}
+
+		static int CB_17() {
+			int x = (AF.Low & FLAG_C) | AF.High << 1;
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_18() {
+			int c = BC.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[BC.High = (byte)((BC.High >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int CB_19() {
+			int c = BC.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[BC.Low = (byte)((BC.Low >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int CB_1A() {
+			int c = DE.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[DE.High = (byte)((DE.High >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int CB_1B() {
+			int c = DE.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[DE.Low = (byte)((DE.Low >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int CB_1C() {
+			int c = HL.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[HL.High = (byte)((HL.High >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int CB_1D() {
+			int c = HL.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[HL.Low = (byte)((HL.Low >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int CB_1E() {
+			int x = VGA.PEEK8(HL.Word), c = x & 0x01;
+			x = (x >>= 1) | (AF.Low << 7);
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)(TabSZYXP[(byte)x] | c);
+			return 4;
+		}
+
+		static int CB_1F() {
+			int c = AF.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)((AF.High >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int CB_20() {
+			int x = BC.High << 1;
+			AF.Low = (byte)(TabSZYXP[BC.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_21() {
+			int x = BC.Low << 1;
+			AF.Low = (byte)(TabSZYXP[BC.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_22() {
+			int x = DE.High << 1;
+			AF.Low = (byte)(TabSZYXP[DE.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_23() {
+			int x = DE.Low << 1;
+			AF.Low = (byte)(TabSZYXP[DE.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_24() {
+			int x = HL.High << 1;
+			AF.Low = (byte)(TabSZYXP[HL.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_25() {
+			int x = HL.Low << 1;
+			AF.Low = (byte)(TabSZYXP[HL.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_26() {
+			int x = VGA.PEEK8(HL.Word) << 1;
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x & 0xFF] | (x >> 8));
+			return 4;
+		}
+
+		static int CB_27() {
+			int x = AF.High << 1;
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_28() {
+			int c = BC.High & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[BC.High = (byte)(((sbyte)BC.High) >> 1)]);
+			return 2;
+		}
+
+		static int CB_29() {
+			int c = BC.Low & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[BC.Low = (byte)(((sbyte)BC.Low) >> 1)]);
+			return 2;
+		}
+
+		static int CB_2A() {
+			int c = DE.High & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[DE.High = (byte)(((sbyte)DE.High) >> 1)]);
+			return 2;
+		}
+
+		static int CB_2B() {
+			int c = DE.Low & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[DE.Low = (byte)(((sbyte)DE.Low) >> 1)]);
+			return 2;
+		}
+
+		static int CB_2C() {
+			int c = HL.High & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[HL.High = (byte)(((sbyte)HL.High) >> 1)]);
+			return 2;
+		}
+
+		static int CB_2D() {
+			int c = HL.Low & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[HL.Low = (byte)(((sbyte)HL.Low) >> 1)]);
+			return 2;
+		}
+
+		static int CB_2E() {
+			int x = VGA.PEEK8(HL.Word), c = x & 0x01;
+			x = ((sbyte)x) >> 1;
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)(c | TabSZYXP[x & 0xFF]);
+			return 4;
+		}
+
+		static int CB_2F() {
+			int c = AF.High & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[AF.High = (byte)(((sbyte)AF.High) >> 1)]);
+			return 2;
+		}
+
+		static int CB_30() {
+			int x = BC.High << 1;
+			AF.Low = (byte)(TabSZYXP[BC.High = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_31() {
+			int x = BC.Low << 1;
+			AF.Low = (byte)(TabSZYXP[BC.Low = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_32() {
+			int x = DE.High << 1;
+			AF.Low = (byte)(TabSZYXP[DE.High = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_33() {
+			int x = DE.Low << 1;
+			AF.Low = (byte)(TabSZYXP[DE.Low = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_34() {
+			int x = HL.High << 1;
+			AF.Low = (byte)(TabSZYXP[HL.High = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_35() {
+			int x = HL.Low << 1;
+			AF.Low = (byte)(TabSZYXP[HL.Low = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_36() {
+			int x = VGA.PEEK8(HL.Word) << 1, c = x >> 8;
+			x |= 1;
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x & 0xFF] | c);
+			return 4;
+		}
+
+		static int CB_37() {
+			int x = AF.High << 1;
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int CB_38() {
+			int c = BC.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[BC.High = (byte)(BC.High >> 1)] | c);
+			return 2;
+		}
+
+		static int CB_39() {
+			int c = BC.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[BC.Low = (byte)(BC.Low >> 1)] | c);
+			return 2;
+		}
+
+		static int CB_3A() {
+			int c = DE.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[DE.High = (byte)(DE.High >> 1)] | c);
+			return 2;
+		}
+
+		static int CB_3B() {
+			int c = DE.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[DE.Low = (byte)(DE.Low >> 1)] | c);
+			return 2;
+		}
+
+		static int CB_3C() {
+			int c = HL.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[HL.High = (byte)(HL.High >> 1)] | c);
+			return 2;
+		}
+
+		static int CB_3D() {
+			int c = HL.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[HL.Low = (byte)(HL.Low >> 1)] | c);
+			return 2;
+		}
+
+		static int CB_3E() {
+			int x = VGA.PEEK8(HL.Word), c = x & 0x01;
+			x >>= 1;
+			VGA.POKE8(HL.Word, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x] | c);
+			return 4;
+		}
+
+		static int CB_3F() {
+			int c = AF.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)(AF.High >> 1)] | c);
+			return 2;
+		}
+
+		static int CB_40() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[BC.High & (1 << ((LastInstr >> 3) & 0x07))] | (BC.High & FLAGS_53));
+			return 2;
+		}
+
+		static int CB_41() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[BC.Low & (1 << ((LastInstr >> 3) & 0x07))] | (BC.Low & FLAGS_53));
+			return 2;
+		}
+
+		static int CB_42() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[DE.High & (1 << ((LastInstr >> 3) & 0x07))] | (DE.High & FLAGS_53));
+			return 2;
+		}
+
+		static int CB_43() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[DE.Low & (1 << ((LastInstr >> 3) & 0x07))] | (DE.Low & FLAGS_53));
+			return 2;
+		}
+
+		static int CB_44() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[HL.High & (1 << ((LastInstr >> 3) & 0x07))] | (HL.High & FLAGS_53));
+			return 2;
+		}
+
+		static int CB_45() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[HL.Low & 0x01] | (HL.Low & FLAGS_53));
+			return 2;
+		}
+
+		static int CB_46() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[VGA.PEEK8(HL.Word) & (1 << ((LastInstr >> 3) & 0x07))] | (memPtr >> 8 & FLAGS_53));
+			return 4;
+		}
+
+		static int CB_47() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[AF.High & (1 << ((LastInstr >> 3) & 0x07))] | (AF.High & FLAGS_53));
+			return 2;
+		}
+
+		static int CB_80() {
+			BC.High &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_81() {
+			BC.Low &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_82() {
+			DE.High &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_83() {
+			DE.Low &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_84() {
+			HL.High &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_85() {
+			HL.Low &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_86() {
+			VGA.POKE8(HL.Word, (byte)(VGA.PEEK8(HL.Word) & ~(1 << ((LastInstr >> 3) & 0x07))));
+			return 4;
+		}
+
+		static int CB_87() {
+			AF.High &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_C0() {
+			BC.High = (byte)(BC.High | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_C1() {
+			BC.Low = (byte)(BC.Low | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_C2() {
+			DE.High = (byte)(DE.High | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_C3() {
+			DE.Low = (byte)(DE.Low | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_C4() {
+			HL.High = (byte)(HL.High | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_C5() {
+			HL.Low = (byte)(HL.Low | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int CB_C6() {
+			VGA.POKE8(HL.Word, (byte)(VGA.PEEK8(HL.Word) | 1 << ((LastInstr >> 3) & 0x07)));
+			return 4;
+		}
+
+		static int CB_C7() {
+			AF.High = (byte)(AF.High | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int ___CC() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (6);
+			if ((AF.Low & FLAG_Z) != 0) {
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				PC.Word = memPtr;
+				return 5;
+			}
+			return 3;
 		}
 
-
-		static int ED_4D() {/* RETI */
-			IFF1 = IFF2;
-			MemPtr.Word = PC.Word = POP();
-			return (4);
-		}
-
-
-		static int ED_4F() {/* LD R, A */
-			IR.Low = AF.High;
-			SupIrqWaitState = 1;
-			return (3);
-		}
-
-
-		static int ED_50() {/* IN D, ( C ) */
-			DE.High = (byte)GestPort.ReadPort(BC.Word);
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[DE.High]);
-			return (4);
-		}
-
-
-		static int ED_51() {/* OUT ( C ), D */
-			GestPort.WritePort(BC.Word, DE.High);
-			return (4);
-		}
-
-
-		static int ED_52() {/* SBC HL, DE */
-			return SBC_R16(DE.Word);
-		}
-
-
-		static int ED_53() {/* LD ( nnnn ), DE */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			VGA.POKE16(MemPtr.Word, DE.Word);
-			MemPtr.Word++;
+		static int ___CD() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (6);
+			SP.Word -= 2;
+			VGA.POKE16(SP.Word, PC.Word);
+			PC.Word = memPtr;
+			return 5;
 		}
 
-
-		static int ED_56() {/* IM 1 */
-			InterruptMode = 1;
-			return (2);
+		static int ___CE() {
+			int x = VGA.PEEK8(PC.Word++), z = AF.High + x + (AF.Low & FLAG_C), c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 2;
 		}
 
-
-		static int ED_57() {/* LD A, I */
-			AF.High = IR.High;
-			SupIrqWaitState = 1;
-			AF.Low = (byte)((AF.Low & FLAG_C) | (AF.High != 0 ? (AF.High & FLAG_S) : FLAG_Z) | (AF.High & (FLAG_5 | FLAG_3)) | (IFF2 != 0 ? FLAG_V : 0));
-			return (3);
+		static int ___D0() {
+			if ((AF.Low & FLAG_C) != 0)
+				return 2;
+			else {
+				memPtr = PC.Word = VGA.PEEK16(SP.Word);
+				SP.Word += 2;
+				return 4;
+			}
 		}
 
-
-		static int ED_58() {/* IN E, ( C ) */
-			DE.Low = (byte)GestPort.ReadPort(BC.Word);
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[DE.Low]);
-			return (4);
+		static int ___D1() {
+			DE.Word = VGA.PEEK16(SP.Word);
+			SP.Word += 2;
+			return 3;
 		}
 
-
-		static int ED_59() {/* OUT ( C ), E */
-			GestPort.WritePort(BC.Word, DE.Low);
-			return (4);
+		static int ___D2() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = (ushort)((AF.Low & FLAG_C) != 0 ? PC.Word + 2 : memPtr);
+			return 3;
 		}
 
-
-		static int ED_5A() {/* ADC HL, DE */
-			return ADC_R16(DE.Word);
+		static int ___D3() {
+			memPtr = (ushort)((AF.High << 8) | VGA.PEEK8(PC.Word++));
+			GestPort.WritePort(memPtr++, AF.High);
+			return 3;
 		}
 
-
-		static int ED_5B() {/* LD DE, ( nnnn ) */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			DE.Word = VGA.PEEK16(MemPtr.Word);
-			MemPtr.Word++;
+		static int ___D4() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (6);
+			if ((AF.Low & FLAG_C) != 0)
+				return 3;
+			else {
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				PC.Word = memPtr;
+				return 5;
+			}
 		}
 
-
-		static int ED_5E() {/* IM 2 */
-			InterruptMode = 2;
-			return (2);
+		static int ___D5() {
+			SP.Word -= 2;
+			VGA.POKE16(SP.Word, DE.Word);
+			return 4;
 		}
 
-
-		static int ED_5F() {/* LD A, R */
-			AF.High = IR.Low;
-			SupIrqWaitState = 1;
-			AF.Low = (byte)((AF.Low & FLAG_C) | (AF.High != 0 ? (AF.High & FLAG_S) : FLAG_Z) | (AF.High & (FLAG_5 | FLAG_3)) | (IFF2 != 0 ? FLAG_V : 0));
-			return (3);
+		static int ___D6() {
+			int x = VGA.PEEK8(PC.Word++), z = AF.High - x, c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 2;
 		}
 
-
-		static int ED_60() {/* IN H, ( C ) */
-			HL.High = (byte)GestPort.ReadPort(BC.Word);
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[HL.High]);
-			return (4);
+		static int ___D8() {
+			if ((AF.Low & FLAG_C) != 0) {
+				memPtr = PC.Word = VGA.PEEK16(SP.Word);
+				SP.Word += 2;
+				return 4;
+			}
+			return 2;
 		}
 
-
-		static int ED_61() {/* OUT ( C ), H */
-			GestPort.WritePort(BC.Word, HL.High);
-			return (4);
+		static int ___D9() {
+			ushort t = BC.Word;
+			BC = _BC;
+			_BC.Word = t;
+			t = DE.Word;
+			DE = _DE;
+			_DE.Word = t;
+			t = HL.Word;
+			HL = _HL;
+			_HL.Word = t;
+			return 1;
 		}
 
-
-		static int ED_62() {/* SBC HL, HL */
-			return SBC_R16(HL.Word);
+		static int ___DA() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = (ushort)((AF.Low & FLAG_C) != 0 ? memPtr : PC.Word + 2);
+			return 3;
 		}
 
-		static int ED_63() {/* LD ( nnnn ), HL */
-			return (1 + ___22());  // Identique à l'instruction #22
+		static int ___DB() {
+			memPtr = (ushort)((AF.High << 8) | VGA.PEEK8(PC.Word++));
+			AF.High = (byte)GestPort.ReadPort(memPtr++);
+			return 3;
 		}
 
-
-		static int ED_67() {/* RRD */
-			int a = AF.High;
-			int hl = VGA.PEEK8(HL.Word);
-			MemPtr.Word = (ushort)(HL.Word + 1);
-			AF.High = (byte)((a & 0xF0) | (hl & 0xF));
-			VGA.POKE8(HL.Word, (byte)((hl >> 4) | (a << 4)));
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[AF.High]);
-			return (5);
-		}
-
-
-		static int ED_68() {/* IN L, ( C ) */
-			HL.Low = (byte)GestPort.ReadPort(BC.Word);
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[HL.Low]);
-			return (4);
-		}
-
-
-		static int ED_69() {/* OUT ( C ), L */
-			GestPort.WritePort(BC.Word, HL.Low);
-			return (4);
-		}
-
-
-		static int ED_6A() {/* ADC HL, HL */
-			return ADC_R16(HL.Word);
-		}
-
-
-		static int ED_6B() {/* LD HL, ( nnnn ) */
-			return (1 + ___2A()); // Identique à l'instruction #2A
-		}
-
-
-		static int ED_6F() {/* RLD */
-			int a = AF.High;
-			int hl = VGA.PEEK8(HL.Word);
-			MemPtr.Word = (ushort)(HL.Word + 1);
-			AF.High = (byte)((a & 0xF0) | (hl >> 4));
-			VGA.POKE8(HL.Word, (byte)((hl << 4) | (a & 0xF)));
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[AF.High]);
-			return (5);
-		}
-
-
-		static int ED_70() {/* IN F, ( C ) */
-			int Tmp = GestPort.ReadPort(BC.Word);
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[Tmp]);
-			return (4);
-		}
-
-
-		static int ED_71() {/* OUT ( C ), 0 */
-			GestPort.WritePort(BC.Word, 0);
-			return (4);
-		}
-
-
-		static int ED_72() {/* SBC HL, SP */
-			return SBC_R16(SP.Word);
-		}
-
-
-		static int ED_73() {/* LD ( nnnn ), SP */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			VGA.POKE16(MemPtr.Word, SP.Word);
-			MemPtr.Word++;
+		static int ___DC() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (6);
-		}
-
-
-		static int ED_78() {/* IN A, ( C ) */
-			AF.High = (byte)GestPort.ReadPort(BC.Word);
-			MemPtr.Word = (ushort)(BC.Word + 1);
-			AF.Low = (byte)((AF.Low & FLAG_C) | Parite[AF.High]);
-			return (4);
-		}
-
-
-		static int ED_79() {/* OUT ( C ), A */
-			GestPort.WritePort(BC.Word, AF.High);
-			MemPtr.Word = (ushort)(BC.Word + 1);
-			return (4);
-		}
-
-
-		static int ED_7A() {/* ADC HL, SP */
-			return ADC_R16(SP.Word);
-		}
-
-
-		static int ED_7B() {/* LD SP, ( nnnn ) */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			SP.Word = VGA.PEEK16(MemPtr.Word);
-			MemPtr.Word++;
-			PC.Word += 2;
-			return (6);
-		}
-
-
-		static int ED_A0() {/* LDI */
-			int v = VGA.PEEK8(HL.Word++);
-			VGA.POKE8(DE.Word++, (byte)v);
-			AF.Low &= N_FLAG_H & N_FLAG_V & N_FLAG_N & N_FLAG_5 & N_FLAG_3;
-			v += AF.High;
-			AF.Low |= (byte)(((v << 4) & FLAG_5) | (v & FLAG_3));
-			if (--BC.Word != 0)
-				AF.Low |= FLAG_V;
-
-			SupIrqWaitState = 1;
-			return (5);
-		}
-
-
-		static int ED_A1() {/* CPI */
-			int v = VGA.PEEK8(HL.Word++);
-			MemPtr.Word++;
-			int t = AF.High - v;
-			AF.Low = (byte)((AF.Low & FLAG_C) | FLAG_N | (t & FLAG_S) | ((t & 0xFF) != 0 ? 0 : FLAG_Z) | ((AF.High ^ v ^ t) & FLAG_H) | (--BC.Word != 0 ? FLAG_V : 0));
-			if ((AF.Low & FLAG_H) != 0)
-				t--;
-
-			AF.Low |= (byte)(((t << 4) & FLAG_5) | (t & FLAG_3));
-			return (4);
-		}
-
-
-		static int ED_A2() {/* INI */
-			VGA.POKE8(HL.Word++, (byte)GestPort.ReadPort(BC.Word));
-			MemPtr.Word = (ushort)(BC.Word + 1);
-			AF.Low = FLAG_S | FLAG_V | FLAG_N;
-			if (--BC.High == 0)
-				AF.Low |= FLAG_Z;
-
-			return (5);
-		}
-
-
-		static int ED_A3() {/* OUTI */
-			AF.Low &= N_FLAG_H & N_FLAG_Z;
-			if (--BC.High == 0)
-				AF.Low |= FLAG_Z;
-
-			MemPtr.Word = (ushort)(BC.Word + 1);
-			VGA.DelayGa = 1;
-			GestPort.WritePort(BC.Word, VGA.PEEK8(HL.Word++));
-			return (5);
-		}
-
-
-		static int ED_A8() {/* LDD */
-			int v = VGA.PEEK8(HL.Word--);
-			VGA.POKE8(DE.Word--, (byte)v);
-			AF.Low &= N_FLAG_H & N_FLAG_V & N_FLAG_N & N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)((((AF.High + v) << 4) & FLAG_5) | ((AF.High + v) & FLAG_3));
-			if (--BC.Word != 0)
-				AF.Low |= FLAG_V;
-
-			SupIrqWaitState = 1;
-			return (5);
-		}
-
-
-		static int ED_A9() {/* CPD */
-			int v = VGA.PEEK8(HL.Word--);
-			MemPtr.Word--;
-			int t = AF.High - v;
-			AF.Low = (byte)((AF.Low & FLAG_C) | FLAG_N | (t & FLAG_S) | ((t & 0xFF) != 0 ? 0 : FLAG_Z) | ((AF.High ^ v ^ t) & FLAG_H) | (--BC.Word != 0 ? FLAG_V : 0));
-			if ((AF.Low & FLAG_H) != 0)
-				t--;
-
-			AF.Low |= (byte)(((t << 4) & FLAG_5) | (t & FLAG_3));
-			return (4);
-		}
-
-
-		static int ED_AA() {/* IND */
-			AF.Low = FLAG_N | FLAG_Z;
-			VGA.POKE8(HL.Word--, (byte)GestPort.ReadPort(BC.Word));
-			MemPtr.Word = (ushort)(BC.Word - 1);
-			if (--BC.High != 0)
-				AF.Low &= N_FLAG_Z;
-
-			return (5);
-		}
-
-
-		static int ED_AB() {/* OUTD */
-			AF.Low = FLAG_N | FLAG_Z;
-			if (--BC.High != 0)
-				AF.Low &= N_FLAG_Z;
-
-			MemPtr.Word = (ushort)(BC.Word - 1);
-			VGA.DelayGa = 1;
-			GestPort.WritePort(BC.Word, VGA.PEEK8(HL.Word--));
-			return (5);
-		}
-
-
-		static int ED_B0() {/* LDIR */
-			int r = 5;
-			int v = VGA.PEEK8(HL.Word++);
-			VGA.POKE8(DE.Word++, (byte)v);
-			AF.Low &= N_FLAG_H & N_FLAG_V & N_FLAG_N & N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)((((AF.High + v) << 4) & FLAG_5) | ((AF.High + v) & FLAG_3));
-			if (--BC.Word != 0) {
-				AF.Low |= FLAG_V;
-				r++;
-				PC.Word -= 2;
-				MemPtr.Word = (ushort)(PC.Word + 1);
+			if ((AF.Low & FLAG_C) != 0) {
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				PC.Word = memPtr;
+				return 5;
 			}
-			SupIrqWaitState = 1;
-			return (r);
+			return 3;
 		}
 
-
-		static int ED_B1() {/* CPIR */
-			int r = 4;
-			byte i = VGA.PEEK8(HL.Word++);
-			byte tmp = (byte)(AF.High - i);
-			MemPtr.Word++;
-			BC.Word--;
-			AF.Low = (byte)(FLAG_N | (AF.Low & FLAG_C) | (tmp & FLAG_S) | (tmp != 0 ? 0 : FLAG_Z) | ((AF.High ^ i ^ tmp) & FLAG_H) | (BC.Word != 0 ? FLAG_V : 0));
-			if (BC.Word != 0 && tmp != 0) {
-				SupIrqWaitState = 1;
-				r += 2;
-				PC.Word -= 2;
-				MemPtr.Word = (ushort)(PC.Word + 1);
-			}
-			return (r);
+		static int ___DD() {
+			IR.Low ^= (byte)(((IR.Low + 1) ^ IR.Low) & 0x7F);
+			return 1 + TabInstrDD[LastInstr = VGA.PEEK8(PC.Word++)]();
 		}
 
-
-		static int ED_B2() {/* INIR */
-			int r = 5;
-			VGA.POKE8(HL.Word++, (byte)GestPort.ReadPort(BC.Word));
-			MemPtr.Word = (ushort)(BC.Word + 1);
-			AF.Low = FLAG_S | FLAG_V | FLAG_N | FLAG_Z;
-			if (--BC.High != 0) {
-				AF.Low &= N_FLAG_Z;
-				PC.Word -= 2;
-				r++;
-			}
-			return (r);
+		static int DD_09() {
+			int z = (memPtr = IX.Word) + BC.Word, c = (memPtr++ ^ BC.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | ((z >> 8) & FLAGS_53));
+			IX.Word = (ushort)z;
+			return 3;
 		}
 
-
-		static int ED_B3() {/* OTIR */
-			int r = 5;
-			AF.Low = (byte)((AF.Low | FLAG_Z) & N_FLAG_H);
-			MemPtr.Word = (ushort)(BC.Word + 1);
-			VGA.DelayGa = 1;
-			if (--BC.High != 0) {
-				AF.Low &= N_FLAG_Z;
-				PC.Word -= 2;
-				r++;
-				VGA.DelayGa++;
-			}
-			GestPort.WritePort(BC.Word, VGA.PEEK8(HL.Word++));
-			return (r);
+		static int DD_19() {
+			int z = (memPtr = IX.Word) + DE.Word, c = (memPtr++ ^ DE.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | ((z >> 8) & FLAGS_53));
+			IX.Word = (ushort)z;
+			return 3;
 		}
 
-
-		static int ED_B8() {/* LDDR */
-			int r = 5;
-			int v = VGA.PEEK8(HL.Word--);
-			VGA.POKE8(DE.Word--, (byte)v);
-			AF.Low &= N_FLAG_H & N_FLAG_V & N_FLAG_N & N_FLAG_5 & N_FLAG_3;
-			AF.Low |= (byte)((((AF.High + v) << 4) & FLAG_5) | ((AF.High + v) & FLAG_3));
-			if ((--BC.Word != 0)) {
-				AF.Low |= FLAG_V;
-				r++;
-				PC.Word -= 2;
-				MemPtr.Word = (ushort)(PC.Word + 1);
-			}
-			SupIrqWaitState = 1;
-			return (r);
-		}
-
-
-		static int ED_B9() {/* CPDR */
-			int r = 4;
-			byte i = VGA.PEEK8(HL.Word--);
-			byte tmp = (byte)(AF.High - i);
-			MemPtr.Word--;
-			BC.Word--;
-			AF.Low = (byte)(FLAG_N | (AF.Low & FLAG_C) | (tmp & FLAG_S) | (tmp != 0 ? 0 : FLAG_Z) | ((AF.High ^ i ^ tmp) & FLAG_H) | (BC.Word != 0 ? FLAG_V : 0));
-			if (BC.Word != 0 && tmp != 0) {
-				SupIrqWaitState = 1;
-				r += 2;
-				PC.Word -= 2;
-				MemPtr.Word = (ushort)(PC.Word + 1);
-			}
-			return (r);
-		}
-
-
-		static int ED_BA() {/* INDR */
-			int r = 5;
-			AF.Low = FLAG_N | FLAG_Z;
-			VGA.POKE8(HL.Word--, (byte)GestPort.ReadPort(BC.Word));
-			MemPtr.Word = (ushort)(BC.Word - 1);
-			if (--BC.High != 0) {
-				AF.Low &= N_FLAG_Z;
-				PC.Word -= 2;
-				r++;
-			}
-			return (r);
-		}
-
-
-		static int ED_BB() {/* OTDR */
-			int r = 5;
-			MemPtr.Word = (ushort)(PC.Word - 1);
-			AF.Low = FLAG_N | FLAG_Z;
-			VGA.DelayGa = 1;
-			if (--BC.High != 0) {
-				AF.Low &= N_FLAG_Z;
-				PC.Word -= 2;
-				r++;
-				VGA.DelayGa++;
-			}
-			GestPort.WritePort(BC.Word, VGA.PEEK8(HL.Word--));
-			return (r);
-		}
-
-
-		/************
-	   * OPCODE DD *
-	   ************/
-
-		static int dd___() {
-			return (1);
-		}
-
-
-		static ushort GetIXdd() {
-			int ofs = VGA.PEEK8(PC.Word++);
-			MemPtr.Word = (ushort)(IX.Word + (ofs > 127 ? ofs - 256 : ofs));
-			return MemPtr.Word;
-		}
-
-
-		static int DD_09() {/* ADD IX, BC */
-			return ADD_R16(ref IX.Word, BC.Word);
-		}
-
-
-		static int DD_19() {/* ADD IX, DE */
-			return ADD_R16(ref IX.Word, DE.Word);
-		}
-
-
-		static int DD_21() {/* LD IX, nnnn */
+		static int DD_21() {
 			IX.Word = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (3);
+			return 3;
 		}
 
-
-		static int DD_22() {/* LD ( nnnn ), IX */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			VGA.POKE16(MemPtr.Word, IX.Word);
-			MemPtr.Word++;
+		static int DD_22() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (5);
+			VGA.POKE16(memPtr++, IX.Word);
+			return 5;
 		}
 
-
-		static int DD_23() {/* INC IX */
-			++IX.Word;
-			SupIrqWaitState = 1;
-			return (2);
+		static int DD_23() {
+			IX.Word++;
+			return 2;
 		}
 
-
-		static int DD_24() {/* INC IXh */
-			return FLAG_INC(++IX.High);
+		static int DD_24() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++IX.High]);
+			return 1;
 		}
 
-
-		static int DD_25() {/* DEC IXh */
-			return FLAG_DEC(--IX.High);
+		static int DD_25() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--IX.High]);
+			return 1;
 		}
 
-
-		static int DD_26() {/* LD IXh, n */
+		static int DD_26() {
 			IX.High = VGA.PEEK8(PC.Word++);
-			return (2);
+			return 2;
 		}
 
-
-		static int DD_29() {/* ADD IX, IX */
-			return ADD_R16(ref IX.Word, IX.Word);
+		static int DD_29() {
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | ((IX.Word >> 7) & 0x38) | (IX.Word >> 15));
+			memPtr = (ushort)(IX.Word + 1);
+			IX.Word <<= 1;
+			return 3;
 		}
 
-
-		static int DD_2A() {/* LD IX, ( nnnn ) */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			IX.Word = VGA.PEEK16(MemPtr.Word);
-			MemPtr.Word++;
+		static int DD_2A() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (5);
+			IX.Low = VGA.PEEK8(memPtr++);
+			IX.High = VGA.PEEK8(memPtr);
+			return 5;
 		}
 
-
-		static int DD_2B() {/* DEC IX */
-			--IX.Word;
-			SupIrqWaitState = 1;
-			return (2);
+		static int DD_2B() {
+			IX.Word--;
+			return 2;
 		}
 
-
-		static int DD_2C() {/* INC IXl */
-			return FLAG_INC(++IX.Low);
+		static int DD_2C() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++IX.Low]);
+			return 1;
 		}
 
-
-		static int DD_2D() {/* DEC IXl */
-			return FLAG_DEC(--IX.Low);
+		static int DD_2D() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--IX.Low]);
+			return 1;
 		}
 
-
-		static int DD_2E() {/* LD IXl, n */
+		static int DD_2E() {
 			IX.Low = VGA.PEEK8(PC.Word++);
-			return (2);
+			return 2;
 		}
 
-
-		static int DD_34() {/* INC (IX+n) */
-			ushort ofs = GetIXdd();
-			byte r = VGA.PEEK8(ofs);
-			FLAG_INC(++r);
-			VGA.POKE8(ofs, r);
-			return (5);
+		static int DD_34() {
+			ushort t = (ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++));
+			int x = VGA.PEEK8(t) + 1;
+			VGA.POKE8(t, (byte)x);
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[(byte)x]);
+			return 5;
 		}
 
-
-		static int DD_35() {/* DEC (IX+n) */
-			ushort ofs = GetIXdd();
-			byte r = VGA.PEEK8(ofs);
-			FLAG_DEC(--r);
-			VGA.POKE8(ofs, r);
-			return (5);
+		static int DD_35() {
+			ushort t = (ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++));
+			int x = VGA.PEEK8(t) - 1;
+			VGA.POKE8(t, (byte)x);
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[(byte)x]);
+			return 5;
 		}
 
-
-		static int DD_36() {/* LD (IX+d), n */
-			ushort ofs = GetIXdd();
-			VGA.POKE8(ofs, VGA.PEEK8(PC.Word++));
-			return (5);
+		static int DD_36() {
+			VGA.POKE8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)), VGA.PEEK8(PC.Word++));
+			return 5;
 		}
 
-
-		static int DD_39() {/* ADD IX, SP */
-			return ADD_R16(ref IX.Word, SP.Word);
+		static int DD_39() {
+			int z = (memPtr = IX.Word) + SP.Word, c = (memPtr++ ^ SP.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | ((z >> 8) & FLAGS_53));
+			IX.Word = (ushort)z;
+			return 3;
 		}
 
-
-		static int DD_44() {/* LD B, IXh */
+		static int DD_44() {
 			BC.High = IX.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_45() {/* LD B, IXl */
+		static int DD_45() {
 			BC.High = IX.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_46() {/* LD B, (IX+d) */
-			BC.High = VGA.PEEK8(GetIXdd());
-			return (4);
+		static int DD_46() {
+			BC.High = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
-
-
-		static int DD_4C() {/* LD C, IXh */
+		static int DD_4C() {
 			BC.Low = IX.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_4D() {/* LD C, IXl */
+		static int DD_4D() {
 			BC.Low = IX.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_4E() {/* LD C, (IX+d) */
-			BC.Low = VGA.PEEK8(GetIXdd());
-			return (4);
+		static int DD_4E() {
+			BC.Low = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int DD_54() {/* LD D, IXh */
+		static int DD_54() {
 			DE.High = IX.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_55() {/* LD D, IXl */
+		static int DD_55() {
 			DE.High = IX.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_56() {/* LD D, (IX+d) */
-			DE.High = VGA.PEEK8(GetIXdd());
-			return (4);
+		static int DD_56() {
+			DE.High = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int DD_5C() {/* LD E, IXh */
+		static int DD_5C() {
 			DE.Low = IX.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_5D() {/* LD E, IXl */
+		static int DD_5D() {
 			DE.Low = IX.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_5E() {/* LD E, (IX+d) */
-			DE.Low = VGA.PEEK8(GetIXdd());
-			return (4);
+		static int DD_5E() {
+			DE.Low = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int DD_60() {/* LD IXh, B */
+		static int DD_60() {
 			IX.High = BC.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_61() {/* LD IXh, C */
+		static int DD_61() {
 			IX.High = BC.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_62() {/* LD IXh, D */
+		static int DD_62() {
 			IX.High = DE.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_63() {/* LD IXh, E */
+		static int DD_63() {
 			IX.High = DE.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_65() {/* LD IXh, IXl */
+		static int DD_65() {
 			IX.High = IX.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_66() {/* LD H, (IX+d) */
-			HL.High = VGA.PEEK8(GetIXdd());
-			return (4);
+		static int DD_66() {
+			HL.High = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int DD_67() {/* LD IXh, A */
+		static int DD_67() {
 			IX.High = AF.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_68() {/* LD IXl, B */
+		static int DD_68() {
 			IX.Low = BC.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_69() {/* LD IXl, C */
+		static int DD_69() {
 			IX.Low = BC.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_6A() {/* LD IXl, D */
+		static int DD_6A() {
 			IX.Low = DE.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_6B() {/* LD IXl, E */
+		static int DD_6B() {
 			IX.Low = DE.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_6C() {/* LD IXl, IXH */
+		static int DD_6C() {
 			IX.Low = IX.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_6E() {/* LD L, (IX+d) */
-			HL.Low = VGA.PEEK8(GetIXdd());
-			return (4);
+		static int DD_6E() {
+			HL.Low = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int DD_6F() {/* LD IXl, A */
+		static int DD_6F() {
 			IX.Low = AF.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_70() {/* LD (IX+d), B */
-			VGA.POKE8(GetIXdd(), BC.High);
-			return (4);
+		static int DD_70() {
+			VGA.POKE8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)), BC.High);
+			return 4;
 		}
 
-
-		static int DD_71() {/* LD (IX+d), C */
-			VGA.POKE8(GetIXdd(), BC.Low);
-			return (4);
+		static int DD_71() {
+			VGA.POKE8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)), BC.Low);
+			return 4;
 		}
 
-
-		static int DD_72() {/* LD (IX+d), D */
-			VGA.POKE8(GetIXdd(), DE.High);
-			return (4);
+		static int DD_72() {
+			VGA.POKE8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)), DE.High);
+			return 4;
 		}
 
-
-		static int DD_73() {/* LD (IX+d), E */
-			VGA.POKE8(GetIXdd(), DE.Low);
-			return (4);
+		static int DD_73() {
+			VGA.POKE8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)), DE.Low);
+			return 4;
 		}
 
-
-		static int DD_74() {/* LD (IX+d), H */
-			VGA.POKE8(GetIXdd(), HL.High);
-			return (4);
+		static int DD_74() {
+			VGA.POKE8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)), HL.High);
+			return 4;
 		}
 
-
-		static int DD_75() {/* LD (IX+d), L */
-			VGA.POKE8(GetIXdd(), HL.Low);
-			return (4);
+		static int DD_75() {
+			VGA.POKE8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)), HL.Low);
+			return 4;
 		}
 
-
-		static int DD_77() {/* LD (IX+d), A */
-			VGA.POKE8(GetIXdd(), AF.High);
-			return (4);
+		static int DD_77() {
+			VGA.POKE8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)), AF.High);
+			return 4;
 		}
 
-
-		static int DD_7C() {/* LD A, IXh */
+		static int DD_7C() {
 			AF.High = IX.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_7D() {/* LD A, IXl */
+		static int DD_7D() {
 			AF.High = IX.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int DD_7E() {/* LD A, (IX+d) */
-			AF.High = VGA.PEEK8(GetIXdd());
-			return (4);
+		static int DD_7E() {
+			AF.High = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
+		}
+		static int DD_84() {
+			int z = AF.High + IX.High, c = AF.High ^ IX.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
 		}
 
-
-		static int DD_84() {/* ADD A, IXh */
-			return ADD_R8(IX.High, 0);
+		static int DD_85() {
+			int z = AF.High + IX.Low, c = AF.High ^ IX.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
 		}
 
-
-		static int DD_85() {/* ADD A, IXl */
-			return ADD_R8(IX.Low, 0);
+		static int DD_86() {
+			int x = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High + x, c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 4;
 		}
 
-
-		static int DD_86() {/* ADD A, (IX+n) */
-			ADD_R8(VGA.PEEK8(GetIXdd()), 0);
-			return (4);
+		static int DD_8C() {
+			int z = AF.High + IX.High + (AF.Low & FLAG_C), c = AF.High ^ IX.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
 		}
 
-
-		static int DD_8C() {/* ADC A, IXh */
-			return ADD_R8(IX.High, AF.Low);
+		static int DD_8D() {
+			int z = AF.High + IX.Low + (AF.Low & FLAG_C), c = AF.High ^ IX.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
 		}
 
-
-		static int DD_8D() {/* ADC A, IXl */
-			return ADD_R8(IX.Low, AF.Low);
+		static int DD_8E() {
+			int x = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High + x + (AF.Low & FLAG_C), c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 4;
 		}
 
-
-		static int DD_8E() {/* ADC A, (IX+n) */
-			ADD_R8(VGA.PEEK8(GetIXdd()), AF.Low);
-			return (4);
+		static int DD_94() {
+			int z = AF.High - IX.High, c = AF.High ^ IX.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
 		}
 
-
-		static int DD_94() {/* SUB IXh */
-			return SUB_R8(IX.High, 0);
+		static int DD_95() {
+			int z = AF.High - IX.Low, c = AF.High ^ IX.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
 		}
 
-
-		static int DD_95() {/* SUB IXl */
-			return SUB_R8(IX.Low, 0);
+		static int DD_96() {
+			int x = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High - x, c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 4;
 		}
 
-
-		static int DD_96() {/* SUB (IX+n) */
-			SUB_R8(VGA.PEEK8(GetIXdd()), 0);
-			return (4);
+		static int DD_9C() {
+			int z = AF.High - IX.High - (AF.Low & FLAG_C), c = AF.High ^ IX.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
 		}
 
-
-		static int DD_9C() {/* SBC A, IXh */
-			return SUB_R8(IX.High, AF.Low);
+		static int DD_9D() {
+			int z = AF.High - IX.Low - (AF.Low & FLAG_C), c = AF.High ^ IX.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
 		}
 
-
-		static int DD_9D() {/* SBC A, IXl */
-			return SUB_R8(IX.Low, AF.Low);
+		static int DD_9E() {
+			int x = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High - x - (AF.Low & FLAG_C), c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 4;
 		}
 
-
-		static int DD_9E() {/* SBC A, (IX+n) */
-			SUB_R8(VGA.PEEK8(GetIXdd()), AF.Low);
-			return (4);
+		static int DD_A4() {
+			AF.Low = TabSZYXHP[AF.High &= IX.High];
+			return 1;
 		}
 
-
-		static int DD_A4() {/* AND IXh */
-			return AND_R8(IX.High);
+		static int DD_A5() {
+			AF.Low = TabSZYXHP[AF.High &= IX.Low];
+			return 1;
 		}
 
-
-		static int DD_A5() {/* AND IXl */
-			return AND_R8(IX.Low);
+		static int DD_A6() {
+			AF.Low = TabSZYXHP[AF.High &= VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)))];
+			return 4;
 		}
 
-
-		static int DD_A6() {/* AND (IX+n) */
-			AND_R8(VGA.PEEK8(GetIXdd()));
-			return (4);
+		static int DD_AC() {
+			AF.Low = TabSZYXP[AF.High ^= IX.High];
+			return 1;
 		}
 
-
-		static int DD_AC() {/* XOR IXh */
-			return XOR_R8(IX.High);
+		static int DD_AD() {
+			AF.Low = TabSZYXP[AF.High ^= IX.Low];
+			return 1;
 		}
 
-
-		static int DD_AD() {/* XOR IXl */
-			return XOR_R8(IX.Low);
+		static int DD_AE() {
+			AF.Low = TabSZYXP[AF.High ^= VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)))];
+			return 4;
 		}
 
-
-		static int DD_AE() {/* XOR (IX+n) */
-			XOR_R8(VGA.PEEK8(GetIXdd()));
-			return (4);
+		static int DD_B4() {
+			AF.Low = TabSZYXP[AF.High |= IX.High];
+			return 1;
 		}
 
-
-		static int DD_B4() {/* OR IXh */
-			return OR_R8(AF.High);
+		static int DD_B5() {
+			AF.Low = TabSZYXP[AF.High |= IX.Low];
+			return 1;
 		}
 
-
-		static int DD_B5() {/* OR IXl */
-			return OR_R8(IX.Low);
+		static int DD_B6() {
+			AF.Low = TabSZYXP[AF.High |= VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++)))];
+			return 4;
 		}
 
-
-		static int DD_B6() {/* OR (IX+n) */
-			OR_R8(VGA.PEEK8(GetIXdd()));
-			return (4);
+		static int DD_BC() {
+			int z = AF.High - IX.High;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (IX.High & FLAGS_53) | TabHVC[(AF.High ^ IX.High ^ z) & 0x190]);
+			return 1;
 		}
 
-
-		static int DD_BC() {/* CP IXh */
-			return CP_R8(IX.High);
+		static int DD_BD() {
+			int z = AF.High - IX.Low;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (IX.Low & FLAGS_53) | TabHVC[(AF.High ^ IX.Low ^ z) & 0x190]);
+			return 1;
 		}
 
-
-		static int DD_BD() {/* CP IXl */
-			return CP_R8(IX.Low);
+		static int DD_BE() {
+			int x = VGA.PEEK8((ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High - x;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (x & FLAGS_53) | TabHVC[(AF.High ^ x ^ z) & 0x190]);
+			return 4;
 		}
 
-
-		static int DD_BE() {/* CP (IX+n) */
-			CP_R8(VGA.PEEK8(GetIXdd()));
-			return (4);
+		static int DD_CB() {
+			IR.Low ^= (byte)(((IR.Low + 1) ^ IR.Low) & 0x7F);
+			d = (ushort)(IX.Word + (sbyte)VGA.PEEK8(PC.Word++));
+			return TabInstrCBDD[LastInstr = VGA.PEEK8(PC.Word++)]();
 		}
 
-
-		static int DD_CB() {/* special code CB */
-			int k;
-			AdrCB = (ushort)GetIXdd();
-			k = VGA.PEEK8(PC.Word++);
-			//Log(MODULENAME, "Instruction #DD,#CB,#%02X,#%02X (PC=#%04X)", VGA.PEEK8(PC.Word - 2), k, PC.Word - 4, LOG_DEBUG);
-			if (k > 0x3F && k < 0x80)
-				k = (k & 0xF8) | 0x06;
-			CBIndex = true;
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			tabCB[k]();
-			CBIndex = false;
-			return (k > 0x3F && k < 0x80 ? 5 : 6); // ### a vérifier...
+		static int DC_04() {
+			int x = IX.High << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[IX.High = (byte)(x | c)] | c);
+			return 2;
 		}
 
-
-		static int DD_E1() {/* POP IX */
-			IX.Word = POP();
-			return (3);
+		static int DC_05() {
+			int x = IX.Low << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[IX.Low = (byte)(x | c)] | c);
+			return 2;
 		}
 
+		static int DC_06() {
+			int x = VGA.PEEK8(d) << 1, c = x >> 8;
+			x |= c;
+			VGA.POKE8(d, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x & 0xFF] | c);
+			return 6;
+		}
 
-		static int DD_E3() {/* EX (SP), IX */
-			MemPtr.Word = VGA.PEEK16(SP.Word);
+		static int DC_0C() {
+			int c = IX.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[IX.High = (byte)((IX.High >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int DC_0D() {
+			int c = IX.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[IX.Low = (byte)((IX.Low >>= 1) | (c << 7))] | c);
+			return 2;
+		}
+
+		static int DC_0E() {
+			int x = VGA.PEEK8(d), c = x & 0x01;
+			x = (x >> 1) | (c << 7);
+			VGA.POKE8(d, (byte)x);
+			AF.Low = (byte)(TabSZYXP[(byte)x] | c);
+			return 6;
+		}
+
+		static int DC_14() {
+			int x = (AF.Low & FLAG_C) | IX.High << 1;
+			AF.Low = (byte)(TabSZYXP[IX.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int DC_15() {
+			int x = (AF.Low & FLAG_C) | IX.Low << 1;
+			AF.Low = (byte)(TabSZYXP[IX.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int DC_16() {
+			int x = (AF.Low & FLAG_C) | VGA.PEEK8(d) << 1;
+			VGA.POKE8(d, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x & 0xFF] | (x >> 8));
+			return 6;
+		}
+
+		static int DC_1C() {
+			int c = IX.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[IX.High = (byte)((IX.High >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int DC_1D() {
+			int c = IX.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[IX.Low = (byte)((IX.Low >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int DC_1E() {
+			int x = VGA.PEEK8(d), c = x & 0x01;
+			x = (x >> 1) | (AF.Low << 7);
+			VGA.POKE8(d, (byte)x);
+			AF.Low = (byte)(TabSZYXP[(byte)x] | c);
+			return 6;
+		}
+
+		static int DC_24() {
+			int x = IX.High << 1;
+			AF.Low = (byte)(TabSZYXP[IX.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int DC_25() {
+			int x = IX.Low << 1;
+			AF.Low = (byte)(TabSZYXP[IX.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int DC_26() {
+			int x = VGA.PEEK8(d) << 1;
+			VGA.POKE8(d, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x & 0xFF] | (x >> 8));
+			return 6;
+		}
+
+		static int DC_2C() {
+			int c = IX.High & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[IX.High = (byte)(((sbyte)IX.High) >> 1)]);
+			return 2;
+		}
+
+		static int DC_2D() {
+			int c = IX.Low & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[IX.Low = (byte)(((sbyte)IX.Low) >> 1)]);
+			return 2;
+		}
+
+		static int DC_2E() {
+			int x = VGA.PEEK8(d), c = x & 0x01;
+			x = ((sbyte)x) >> 1;
+			VGA.POKE8(d, (byte)x);
+			AF.Low = (byte)(c | TabSZYXP[x & 0xFF]);
+			return 6;
+		}
+
+		static int DC_34() {
+			int x = IX.High << 1;
+			AF.Low = (byte)(TabSZYXP[IX.High = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int DC_35() {
+			int x = IX.Low << 1;
+			AF.Low = (byte)(TabSZYXP[IX.Low = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int DC_36() {
+			int x = VGA.PEEK8(d) << 1;
+			x |= 1;
+			VGA.POKE8(d, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x & 0xFF] | (x >> 8));
+			return 6;
+		}
+
+		static int DC_3C() {
+			int c = IX.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[IX.High = (byte)(IX.High >> 1)] | c);
+			return 2;
+		}
+
+		static int DC_3D() {
+			int c = IX.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[IX.Low = (byte)(IX.Low >> 1)] | c);
+			return 2;
+		}
+
+		static int DC_3E() {
+			int x = VGA.PEEK8(d), c = x & 0x01;
+			x >>= 1;
+			VGA.POKE8(d, (byte)x);
+			AF.Low = (byte)(TabSZYXP[x] | c);
+			return 6;
+		}
+
+		static int DC_44() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[IX.High & 1 << ((LastInstr >> 3) & 0x07)] | (IX.High & FLAGS_53));
+			return 2;
+		}
+
+		static int DC_45() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[IX.Low & 1 << ((LastInstr >> 3) & 0x07)] | (IX.Low & FLAGS_53));
+			return 2;
+		}
+
+		static int DC_46() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[VGA.PEEK8(d) & 1 << ((LastInstr >> 3) & 0x07)] | (d & FLAGS_53));
+			return 5;
+		}
+
+		static int DC_84() {
+			IX.High &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int DC_85() {
+			IX.Low &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int DC_86() {
+			VGA.POKE8(d, (byte)(VGA.PEEK8(d) & ~(1 << ((LastInstr >> 3) & 0x07))));
+			return 6;
+		}
+
+		static int DC_C4() {
+			IX.High = (byte)(IX.High | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int DC_C5() {
+			IX.Low = (byte)(IX.Low | 1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int DC_C6() {
+			VGA.POKE8(d, (byte)(VGA.PEEK8(d) | 1 << ((LastInstr >> 3) & 0x07)));
+			return 6;
+		}
+
+		static int DD_E1() {
+			IX.Word = VGA.PEEK16(SP.Word);
+			SP.Word += 2;
+			return 3;
+		}
+
+		static int DD_E3() {
+			memPtr = VGA.PEEK16(SP.Word);
 			VGA.POKE16(SP.Word, IX.Word);
-			IX.Word = MemPtr.Word;
-			SupIrqWaitState = 1;
-			return (6);
+			IX.Word = memPtr;
+			return 6;
 		}
 
-
-		static int DD_E5() {/* PUSH IX */
-			return PUSH(IX.Word);
+		static int DD_E5() {
+			SP.Word -= 2;
+			VGA.POKE16(SP.Word, IX.Word);
+			return 4;
 		}
 
-
-		static int DD_E9() {/* JP (IX) */
-			PC = IX;
-			return (1);
+		static int DD_E9() {
+			PC.Word = IX.Word;
+			return 1;
 		}
 
-
-		static int DD_F9() {/* LD SP, IX */
+		static int DD_F9() {
 			SP.Word = IX.Word;
-			SupIrqWaitState = 1;
-			return (2);
+			return 2;
 		}
 
-
-		static int DD_FD() {/* special DD_FD */
-			// Se comporte commme un simple FD
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			//Log(MODULENAME, "Instruction #DD,#FD (PC=#%04X)", PC, LOG_DEBUG);
-			return (1 + tabIY[VGA.PEEK8(PC.Word++)]()); // ### A vérifier
+		static int ___DE() {
+			int x = VGA.PEEK8(PC.Word++), z = AF.High - x - (AF.Low & FLAG_C), c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 2;
 		}
 
-
-
-		/************
-	   * OPCODE FD *
-	   ************/
-
-
-		static int fd___() {
-			return (1);
+		static int ___E0() {
+			if ((AF.Low & FLAG_V) != 0)
+				return 2;
+			else {
+				memPtr = PC.Word = VGA.PEEK16(SP.Word);
+				SP.Word += 2;
+				return 4;
+			}
 		}
 
-
-		static ushort GetIYdd() {
-			int ofs = VGA.PEEK8(PC.Word++);
-			MemPtr.Word = (ushort)(IY.Word + (ofs > 127 ? ofs - 256 : ofs));
-			return MemPtr.Word;
+		static int ___E1() {
+			HL.Word = VGA.PEEK16(SP.Word);
+			SP.Word += 2;
+			return 3;
 		}
 
-
-		static int FD_09() {/* ADD IY, BC */
-			return ADD_R16(ref IY.Word, BC.Word);
+		static int ___E2() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = (ushort)((AF.Low & FLAG_V) != 0 ? PC.Word + 2 : memPtr);
+			return 3;
 		}
 
-
-		static int FD_19() {/* ADD IY, DE */
-			return ADD_R16(ref IY.Word, DE.Word);
+		static int ___E3() {
+			memPtr = VGA.PEEK16(SP.Word);
+			VGA.POKE16(SP.Word, HL.Word);
+			HL.Word = memPtr;
+			return 6;
 		}
 
+		static int ___E4() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			if ((AF.Low & FLAG_V) != 0)
+				return 3;
+			else {
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				PC.Word = memPtr;
+				return 5;
+			}
+		}
 
-		static int FD_21() {/* LD IY, nnnn */
+		static int ___E5() {
+			SP.Word -= 2;
+			VGA.POKE16(SP.Word, HL.Word);
+			return 4;
+		}
+
+		static int ___E6() {
+			AF.Low = TabSZYXHP[AF.High &= VGA.PEEK8(PC.Word++)];
+			return 2;
+		}
+
+		static int ___E8() {
+			if ((AF.Low & FLAG_V) != 0)
+				return 2;
+			else {
+				memPtr = PC.Word = VGA.PEEK16(SP.Word);
+				SP.Word += 2;
+				return 4;
+			}
+		}
+
+		static int ___E9() {
+			PC.Word = HL.Word;
+			return 1;
+		}
+
+		static int ___EA() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = (ushort)((AF.Low & FLAG_V) != 0 ? memPtr : PC.Word + 2);
+			return 3;
+		}
+
+		static int ___EB() {
+			ushort t = DE.Word;
+			DE.Word = HL.Word;
+			HL.Word = t;
+			return 1;
+		}
+
+		static int ___EC() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			if ((AF.Low & FLAG_V) != 0) {
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				PC.Word = memPtr;
+				return 5;
+			}
+			return 3;
+		}
+
+		static int ___ED() {
+			IR.Low ^= (byte)(((IR.Low + 1) ^ IR.Low) & 0x7F);
+			return 1 + TabInstrED[LastInstr = VGA.PEEK8(PC.Word++)]();
+		}
+
+		static int ED_40() {
+			AF.Low = (byte)(TabSZYXP[BC.High = (byte)GestPort.ReadPort(memPtr = BC.Word)] | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_41() {
+			memPtr = BC.Word;
+			GestPort.WritePort(memPtr++, BC.High);
+			return 3;
+		}
+
+		static int ED_42() {
+			int z = (memPtr = HL.Word) - BC.Word - (AF.Low & FLAG_C);
+			AF.Low = (byte)(FLAG_N | ((HL.Word = (ushort)z) != 0 ? (z >> 8) & FLAGS_S53 : FLAG_Z) | TabHVC[((memPtr++ ^ BC.Word ^ z) >> 8) & 0x190]);
+			return 3;
+		}
+
+		static int ED_43() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			VGA.POKE16(memPtr++, BC.Word);
+			return 5;
+		}
+
+		static int ED_44() {
+			int c = (AF.High ^ -AF.High) & 0x190;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)-AF.High] | TabHVC[c]);
+			return 1;
+		}
+
+		static int ED_45() {
+			PC.Word = VGA.PEEK16(SP.Word);
+			SP.Word += 2;
+			memPtr = PC.Word;
+			IFF1 = IFF2;
+			return 3;
+		}
+
+		static int ED_46() {
+			InterruptMode = 0;
+			return 1;
+		}
+
+		static int ED_47() {
+			IR.High = AF.High;
+			return 2;
+		}
+
+		static int ED_48() {
+			AF.Low = (byte)(TabSZYXP[BC.Low = (byte)GestPort.ReadPort(memPtr = BC.Word)] | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_49() {
+			memPtr = BC.Word;
+			GestPort.WritePort(memPtr++, BC.Low);
+			return 3;
+		}
+
+		static int ED_4A() {
+			int z = (memPtr = HL.Word) + BC.Word + (AF.Low & FLAG_C);
+			AF.Low = (byte)(((HL.Word = (ushort)z) != 0 ? (z >> 8) & FLAGS_S53 : FLAG_Z) | TabHVC[(memPtr++ ^ BC.Word ^ z) >> 8]);
+			return 3;
+		}
+
+		static int ED_4B() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			BC.Low = VGA.PEEK8(memPtr++);
+			BC.High = VGA.PEEK8(memPtr);
+			return 5;
+		}
+
+		static int ED_4F() {
+			IR.Low = AF.High;
+			return 2;
+		}
+
+		static int ED_50() {
+			AF.Low = (byte)(TabSZYXP[DE.High = (byte)GestPort.ReadPort(memPtr = BC.Word)] | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_51() {
+			memPtr = BC.Word;
+			GestPort.WritePort(memPtr++, DE.High);
+			return 3;
+		}
+
+		static int ED_52() {
+			int z = (memPtr = HL.Word) - DE.Word - (AF.Low & FLAG_C);
+			AF.Low = (byte)(FLAG_N | ((HL.Word = (ushort)z) != 0 ? (z >> 8) & FLAGS_S53 : FLAG_Z) | TabHVC[((memPtr++ ^ DE.Word ^ z) >> 8) & 0x190]);
+			return 3;
+		}
+
+		static int ED_53() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			VGA.POKE16(memPtr++, DE.Word);
+			return 5;
+		}
+
+		static int ED_56() {
+			InterruptMode = 1;
+			return 1;
+		}
+
+		static int ED_57() {
+			int a = IR.High;
+			AF.Word = (ushort)((a << 8) | TabSZYX[a] | IFF2  | (AF.Low & FLAG_C));
+			return 2;
+		}
+
+		static int ED_58() {
+			AF.Low = (byte)(TabSZYXP[DE.Low = (byte)GestPort.ReadPort(memPtr = BC.Word)] | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_59() {
+			memPtr = BC.Word;
+			GestPort.WritePort(memPtr++, DE.Low);
+			return 3;
+		}
+
+		static int ED_5A() {
+			int z = (memPtr = HL.Word) + DE.Word + (AF.Low & FLAG_C);
+			AF.Low = (byte)(((HL.Word = (ushort)z) != 0 ? (z >> 8) & FLAGS_S53 : FLAG_Z) | TabHVC[(memPtr++ ^ DE.Word ^ z) >> 8]);
+			return 3;
+		}
+
+		static int ED_5B() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			DE.Low = VGA.PEEK8(memPtr++);
+			DE.High = VGA.PEEK8(memPtr);
+			return 5;
+		}
+
+		static int ED_5E() {
+			InterruptMode = 2;
+			return 1;
+		}
+
+		static int ED_5F() {
+			int a = IR.Low;
+			AF.Word = (ushort)((a << 8) | TabSZYX[a] | IFF2 | (AF.Low & FLAG_C));
+			return 2;
+		}
+
+		static int ED_60() {
+			AF.Low = (byte)(TabSZYXP[HL.High = (byte)GestPort.ReadPort(memPtr = BC.Word)] | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_61() {
+			memPtr = BC.Word;
+			GestPort.WritePort(memPtr++, HL.High);
+			return 3;
+		}
+
+		static int ED_62() {
+			AF.Low = (byte)(((AF.Low & FLAG_C) != 0 ? 0xB9 : FLAG_Z) | FLAG_N);
+			memPtr = ++HL.Word;
+			HL.Word = (ushort)-(AF.Low & FLAG_C);
+			return 3;
+		}
+
+		static int ED_67() {
+			int x = VGA.PEEK8(memPtr = HL.Word), y;
+			VGA.POKE8(memPtr++, (byte)(y = ((AF.High & 0xF0) << 8) | (((x & 0x0F) << 8) | ((AF.High & 0x0F) << 4) | (x >> 4))));
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)(y >> 8)] | (AF.Low & FLAG_C));
+			return 4;
+		}
+
+		static int ED_68() {
+			AF.Low = (byte)(TabSZYXP[HL.Low = (byte)GestPort.ReadPort(memPtr = BC.Word)] | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_69() {
+			memPtr = BC.Word;
+			GestPort.WritePort(memPtr++, HL.Low);
+			return 3;
+		}
+
+		static int ED_6A() {
+			int z = ((memPtr = HL.Word) << 1) + (AF.Low & FLAG_C);
+			AF.Low = (byte)(((HL.Word = (ushort)z) != 0 ? (z >> 8) & (FLAGS_S53 | FLAG_H) : FLAG_Z) | TabHVC[z >> 8]);
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_6F() {
+			int x = VGA.PEEK8(memPtr = HL.Word), y;
+			VGA.POKE8(memPtr++, (byte)(y = ((AF.High & 0xF0) << 8) | ((x << 4) | (AF.High & 0x0F))));
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)(y >> 8)] | (AF.Low & FLAG_C));
+			return 4;
+		}
+
+		static int ED_70() {
+			AF.Low = (byte)(TabSZYXP[GestPort.ReadPort(memPtr = BC.Word)] | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_71() {
+			memPtr = BC.Word;
+			GestPort.WritePort(memPtr++, 0);
+			return 3;
+		}
+
+		static int ED_72() {
+			int z = (memPtr = HL.Word) - SP.Word - (AF.Low & FLAG_C);
+			AF.Low = (byte)(FLAG_N | ((HL.Word = (ushort)z) != 0 ? (z >> 8) & FLAGS_S53 : FLAG_Z) | TabHVC[((memPtr++ ^ SP.Word ^ z) >> 8) & 0x190]);
+			return 3;
+		}
+
+		static int ED_73() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			VGA.POKE16(memPtr++, SP.Word);
+			return 5;
+		}
+
+		static int ED_78() {
+			AF.Low = (byte)(TabSZYXP[AF.High = (byte)GestPort.ReadPort(memPtr = BC.Word)] | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_79() {
+			memPtr = BC.Word;
+			GestPort.WritePort(memPtr++, AF.High);
+			return 3;
+		}
+
+		static int ED_7A() {
+			int z = (memPtr = HL.Word) + SP.Word + (AF.Low & FLAG_C);
+			AF.Low = (byte)(((HL.Word = (ushort)z) != 0 ? (z >> 8) & FLAGS_S53 : FLAG_Z) | TabHVC[(memPtr++ ^ SP.Word ^ z) >> 8]);
+			return 3;
+		}
+
+		static int ED_7B() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			SP.Low = VGA.PEEK8(memPtr++);
+			SP.High = VGA.PEEK8(memPtr);
+			return 5;
+		}
+
+		static int ED_A0() {
+			int n = VGA.PEEK8(HL.Word++);
+			VGA.POKE8(DE.Word++, (byte)n);
+			n += AF.High;
+			AF.Low = (byte)((AF.Low & FLAGS_SZC) | (--BC.Word != 0 ? 0x04 : 0) | (n & FLAG_3) | ((n << 4) & FLAG_5));
+			return 4;
+		}
+
+		static int ED_A1() {
+			int n = VGA.PEEK8(HL.Word++), z = AF.High - n, f = (AF.High ^ n ^ z) & FLAG_H;
+			n = z - (f >> 4);
+			AF.Low = (byte)(f | ((n << 4) & FLAG_5) | (n & FLAG_3) | TabSZN[z & 0xFF] | (--BC.Word != 0 ? FLAG_V : 0) | (AF.Low & FLAG_C));
+			memPtr++;
+			return 3;
+		}
+
+		static int ED_A2() {
+			int x = GestPort.ReadPort(memPtr = BC.Word);
+			VGA.POKE8(HL.Word++, (byte)x);
+			AF.Low = (byte)(TabSZYX[--BC.High & 0xFF] | (x >> 6));
+			x += ++memPtr & 0xFF;
+			AF.Low |= (byte)(((x & 0x0100) != 0 ? 0x11 : 0) | (TabSZYXP[(x & 0x07) ^ BC.High] & 0x04));
+			return 4;
+		}
+
+		static int ED_A3() {
+			AF.Low = (byte)(AF.Low & ~0x90 | (--BC.High != 0 ? 0 : FLAG_Z));
+			GestPort.WritePort(memPtr = BC.Word, VGA.PEEK8(HL.Word++));
+			memPtr++;
+			return 4;
+		}
+
+		static int ED_A8() {
+			int n = VGA.PEEK8(HL.Word--);
+			VGA.POKE8(DE.Word--, (byte)n);
+			n += AF.High;
+			AF.Low = (byte)((AF.Low & FLAGS_SZC) | (--BC.Word != 0 ? 0x04 : 0) | (n & FLAG_3) | ((n << 4) & FLAG_5));
+			return 4;
+		}
+
+		static int ED_A9() {
+			int n = VGA.PEEK8(HL.Word--), z = AF.High - n, f = (AF.High ^ n ^ z) & FLAG_H;
+			n = z - (f >> 4);
+			AF.Low = (byte)(f | ((n << 4) & FLAG_5) | (n & FLAG_3) | TabSZN[z & 0xFF] | (--BC.Word != 0 ? 0x04 : 0) | (AF.Low & FLAG_C));
+			memPtr--;
+			return 3;
+		}
+
+		static int ED_AA() {
+			int x = GestPort.ReadPort(memPtr = BC.Word);
+			VGA.POKE8(HL.Word--, (byte)x);
+			AF.Low = (byte)(TabSZYX[--BC.High & 0xFF] | (x >> 6));
+			x += --memPtr & 0xFF;
+			AF.Low |= (byte)(((x & 0x0100) != 0 ? 0x11 : 0) | (TabSZYXP[(x & 0x07) ^ BC.High] & 0x04));
+			return 4;
+		}
+
+		static int ED_AB() {
+			AF.Low = (byte)(AF.Low & ~0x90 | (--BC.High != 0 ? 0 : FLAG_Z));
+			GestPort.WritePort(memPtr = BC.Word, VGA.PEEK8(HL.Word--));
+			memPtr--;
+			return 4;
+		}
+
+		static int ED_B0() {
+			int n = VGA.PEEK8(HL.Word++);
+			VGA.POKE8(DE.Word++, (byte)n);
+			n += AF.High;
+			AF.Low = (byte)((AF.Low & FLAGS_SZC) | (--BC.Word != 0 ? 0x04 : 0) | (n & FLAG_3) | ((n << 4) & FLAG_5));
+			if (BC.Word != 0) {
+				PC.Word--;
+				memPtr = PC.Word--;
+				return 5;
+			}
+			return 4;
+		}
+
+		static int ED_B1() {
+			int n = VGA.PEEK8(HL.Word++), z = AF.High - n, f = (AF.High ^ n ^ z) & FLAG_H;
+			n = z - (f >> 4);
+			AF.Low = (byte)(f | ((n << 4) & FLAG_5) | (n & FLAG_3) | TabSZN[z & 0xFF] | (--BC.Word != 0 ? 0x04 : 0) | (AF.Low & FLAG_C));
+			memPtr++;
+			if (z != 0 && BC.Word != 0) {
+				PC.Word--;
+				memPtr = PC.Word--;
+				return 5;
+			}
+			return 3;
+		}
+
+		static int ED_B2() {
+			int x = GestPort.ReadPort(memPtr = BC.Word);
+			VGA.POKE8(HL.Word++, (byte)x);
+			AF.Low = (byte)(TabSZYX[--BC.High & 0xFF] | (x >> 6));
+			x += ++memPtr & 0xFF;
+			AF.Low |= (byte)(((x & 0x0100) != 0 ? 0x11 : 0) | (TabSZYXP[(x & 0x07) ^ BC.High] & 0x04));
+			if (BC.High != 0) {
+				PC.Word -= 2;
+				return 5;
+			}
+			return 4;
+		}
+
+		static int ED_B3() {
+			AF.Low = (byte)(AF.Low & ~0x90 | (--BC.High != 0 ? 0 : FLAG_Z));
+			GestPort.WritePort(memPtr = BC.Word, VGA.PEEK8(HL.Word++));
+			memPtr++;
+			if (BC.High != 0) {
+				PC.Word -= 2;
+				return 5;
+			}
+			return 4;
+		}
+
+		static int ED_B8() {
+			int n = VGA.PEEK8(HL.Word--);
+			VGA.POKE8(DE.Word--, (byte)n);
+			n += AF.High;
+			AF.Low = (byte)((AF.Low & FLAGS_SZC) | (--BC.Word != 0 ? 0x04 : 0) | (n & FLAG_3) | ((n << 4) & FLAG_5));
+			if (BC.Word != 0) {
+				PC.Word--;
+				memPtr = PC.Word--;
+				return 5;
+			}
+			return 4;
+		}
+
+		static int ED_B9() {
+			int n = VGA.PEEK8(HL.Word--), z = AF.High - n, f = (AF.High ^ n ^ z) & FLAG_H;
+			n = z - (f >> 4);
+			AF.Low = (byte)(f | ((n << 4) & FLAG_5) | (n & FLAG_3) | TabSZN[z & 0xFF] | (--BC.Word != 0 ? 0x04 : 0) | (AF.Low & FLAG_C));
+			memPtr--;
+			if (z != 0 && BC.Word != 0) {
+				PC.Word--;
+				memPtr = PC.Word--;
+				return 5;
+			}
+			return 3;
+		}
+
+		static int ED_BA() {
+			int x = GestPort.ReadPort(memPtr = BC.Word);
+			VGA.POKE8(HL.Word--, (byte)x);
+			AF.Low = (byte)(TabSZYX[--BC.High & 0xFF] | (x >> 6));
+			x += --memPtr & 0xFF;
+			AF.Low |= (byte)(((x & 0x0100) != 0 ? 0x11 : 0) | (TabSZYXP[(x & 0x07) ^ BC.High] & 0x04));
+			if (BC.High != 0) {
+				PC.Word -= 2;
+				return 5;
+			}
+			return 4;
+		}
+
+		static int ED_BB() {
+			AF.Low = (byte)(AF.Low & ~0x90 | (--BC.High != 0 ? 0 : FLAG_Z));
+			GestPort.WritePort(memPtr = BC.Word, VGA.PEEK8(HL.Word--));
+			memPtr--;
+			if (BC.High != 0) {
+				PC.Word -= 2;
+				return 5;
+			}
+			return 4;
+		}
+
+		static int ___EE() {
+			AF.Low = TabSZYXP[AF.High ^= VGA.PEEK8(PC.Word++)];
+			return 2;
+		}
+
+		static int ___F0() {
+			if ((AF.Low & FLAG_S) != 0)
+				return 2;
+			else {
+				memPtr = PC.Word = VGA.PEEK16(SP.Word);
+				SP.Word += 2;
+				return 4;
+			}
+		}
+
+		static int ___F1() {
+			AF.Word = VGA.PEEK16(SP.Word);
+			SP.Word += 2;
+			return 3;
+		}
+
+		static int ___F2() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = (ushort)((AF.Low & FLAG_S) != 0 ? PC.Word + 2 : memPtr);
+			return 3;
+		}
+
+		static int ___F3() {
+			IFF1 = IFF2 = 0;
+			return 1;
+		}
+
+		static int ___F4() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			if ((AF.Low & FLAG_S) != 0)
+				return 3;
+			else {
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				PC.Word = memPtr;
+				return 5;
+			}
+		}
+
+		static int ___F5() {
+			SP.Word -= 2;
+			VGA.POKE16(SP.Word, AF.Word);
+			return 4;
+		}
+
+		static int ___F6() {
+			AF.Low = TabSZYXP[AF.High |= VGA.PEEK8(PC.Word++)];
+			return 2;
+		}
+
+		static int ___F8() {
+			if ((AF.Low & FLAG_S) != 0) {
+				memPtr = PC.Word = VGA.PEEK16(SP.Word);
+				SP.Word += 2;
+				return 4;
+			}
+			return 2;
+		}
+
+		static int ___F9() {
+			SP.Word = HL.Word;
+			return 2;
+		}
+
+		static int ___FA() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word = (ushort)((AF.Low & FLAG_S) != 0 ? memPtr : PC.Word + 2);
+			return 3;
+		}
+
+		static int ___FB() {
+			IFF1 = IFF2 = FLAG_V;
+			return 1;
+		}
+
+		static int ___FC() {
+			memPtr = VGA.PEEK16(PC.Word);
+			PC.Word += 2;
+			if ((AF.Low & FLAG_S) != 0) {
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				PC.Word = memPtr;
+				return 5;
+			}
+			return 3;
+		}
+
+		static int ___FD() {
+			IR.Low ^= (byte)(((IR.Low + 1) ^ IR.Low) & 0x7F);
+			return 1 + TabInstrFD[LastInstr = VGA.PEEK8(PC.Word++)]();
+		}
+
+		static int FD_09() {
+			int z = (memPtr = IY.Word) + BC.Word, c = (memPtr++ ^ BC.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | ((z >> 8) & FLAGS_53));
+			IY.Word = (ushort)z;
+			return 3;
+		}
+
+		static int FD_19() {
+			int z = (memPtr = IY.Word) + DE.Word, c = (memPtr++ ^ DE.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | ((z >> 8) & FLAGS_53));
+			IY.Word = (ushort)z;
+			return 3;
+		}
+
+		static int FD_21() {
 			IY.Word = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (3);
+			return 3;
 		}
 
-
-		static int FD_22() {/* LD ( nnnn ), IY */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			VGA.POKE16(MemPtr.Word, IY.Word);
-			MemPtr.Word++;
+		static int FD_22() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (5);
+			VGA.POKE16(memPtr++, IY.Word);
+			return 5;
 		}
 
-
-		static int FD_23() {/* INC IY */
-			++IY.Word;
-			SupIrqWaitState = 1;
-			return (2);
+		static int FD_23() {
+			IY.Word++;
+			return 2;
 		}
 
-
-		static int FD_24() {/* INC IYh */
-			return FLAG_INC(++IY.High);
+		static int FD_24() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++IY.High]);
+			return 1;
 		}
 
-
-		static int FD_25() {/* DEC IYh */
-			return FLAG_DEC(--IY.High);
+		static int FD_25() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--IY.High]);
+			return 1;
 		}
 
-
-		static int FD_26() {/* LD IYh, n */
+		static int FD_26() {
 			IY.High = VGA.PEEK8(PC.Word++);
-			return (2);
+			return 2;
 		}
 
-
-		static int FD_29() {/* ADD IY, IY */
-			return ADD_R16(ref IY.Word, IY.Word);
+		static int FD_29() {
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | ((IY.Word >> 7) & 0x38) | (IY.Word >> 15));
+			memPtr = (ushort)(IY.Word + 1);
+			IY.Word <<= 1;
+			return 3;
 		}
 
-
-		static int FD_2A() {/* LD IY, ( nnnn ) */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			IY.Word = VGA.PEEK16(MemPtr.Word);
-			MemPtr.Word++;
+		static int FD_2A() {
+			memPtr = VGA.PEEK16(PC.Word);
 			PC.Word += 2;
-			return (5);
+			IY.Low = VGA.PEEK8(memPtr++);
+			IY.High = VGA.PEEK8(memPtr);
+			return 5;
 		}
 
-
-		static int FD_2B() {/* DEC IY */
-			--IY.Word;
-			SupIrqWaitState = 1;
-			return (2);
+		static int FD_2B() {
+			IY.Word--;
+			return 2;
 		}
 
-
-		static int FD_2C() {/* INC IYl */
-			return FLAG_INC(++IY.Low);
+		static int FD_2C() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[++IY.Low]);
+			return 1;
 		}
 
-
-		static int FD_2D() {/* DEC IYl */
-			return FLAG_DEC(--IY.Low);
+		static int FD_2D() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[--IY.Low]);
+			return 1;
 		}
 
-
-		static int FD_2E() {/* LD IYl, n */
+		static int FD_2E() {
 			IY.Low = VGA.PEEK8(PC.Word++);
-			return (2);
+			return 2;
 		}
 
-
-		static int FD_34() {/* INC (IY+n) */
-			ushort ofs = GetIYdd();
-			byte r = VGA.PEEK8(ofs);
-			FLAG_INC(++r);
-			VGA.POKE8(ofs, r);
-			return (5);
+		static int FD_34() {
+			ushort t = (ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++));
+			int x = VGA.PEEK8(t) + 1;
+			VGA.POKE8(t, (byte)x);
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabInc[(byte)x]);
+			return 5;
 		}
 
-
-		static int FD_35() {/* DEC (IY+n) */
-			ushort ofs = GetIYdd();
-			byte r = VGA.PEEK8(ofs);
-			FLAG_DEC(--r);
-			VGA.POKE8(ofs, r);
-			return (5);
+		static int FD_35() {
+			ushort t = (ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++));
+			int x = VGA.PEEK8(t) - 1;
+			VGA.POKE8(t, (byte)x);
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabDec[(byte)x]);
+			return 5;
 		}
 
-
-		static int FD_36() {/* LD (IY+d), n */
-			ushort ofs = GetIYdd();
-			VGA.POKE8(ofs, VGA.PEEK8(PC.Word++));
-			return (5);
+		static int FD_36() {
+			VGA.POKE8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)), VGA.PEEK8(PC.Word++));
+			return 5;
 		}
 
-
-		static int FD_39() {/* ADD IY, SP */
-			return ADD_R16(ref IY.Word, SP.Word);
+		static int FD_39() {
+			int z = (memPtr = IY.Word) + SP.Word, c = (memPtr++ ^ SP.Word ^ z) >> 8;
+			AF.Low = (byte)((AF.Low & FLAGS_SZV) | (c & FLAG_H) | (c >> 8) | ((z >> 8) & FLAGS_53));
+			IY.Word = (ushort)z;
+			return 3;
 		}
 
-
-		static int FD_44() {/* LD B, IYh */
+		static int FD_44() {
 			BC.High = IY.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_45() {/* LD B, IYl */
+		static int FD_45() {
 			BC.High = IY.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_46() {/* LD B, (IY+d) */
-			BC.High = VGA.PEEK8(GetIYdd());
-			return (4);
+		static int FD_46() {
+			BC.High = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int FD_4C() {/* LD C, IYh */
+		static int FD_4C() {
 			BC.Low = IY.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_4D() {/* LD C, IYl */
+		static int FD_4D() {
 			BC.Low = IY.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_4E() {/* LD C, (IY+d) */
-			BC.Low = VGA.PEEK8(GetIYdd());
-			return (4);
+		static int FD_4E() {
+			BC.Low = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int FD_54() {/* LD D, IYh */
+		static int FD_54() {
 			DE.High = IY.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_55() {/* LD D, IYl */
+		static int FD_55() {
 			DE.High = IY.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_56() {/* LD D, (IY+d) */
-			DE.High = VGA.PEEK8(GetIYdd());
-			return (4);
+		static int FD_56() {
+			DE.High = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int FD_5C() {/* LD E, IYh */
+		static int FD_5C() {
 			DE.Low = IY.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_5D() {/* LD E, IYl */
+		static int FD_5D() {
 			DE.Low = IY.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_5E() {/* LD E, (IY+d) */
-			DE.Low = VGA.PEEK8(GetIYdd());
-			return (4);
+		static int FD_5E() {
+			DE.Low = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int FD_60() {/* LD IYh, B */
+		static int FD_60() {
 			IY.High = BC.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_61() {/* LD IYh, C */
+		static int FD_61() {
 			IY.High = BC.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_62() {/* LD IYh, D */
+		static int FD_62() {
 			IY.High = DE.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_63() {/* LD IYh, E */
+		static int FD_63() {
 			IY.High = DE.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_65() {/* LD IYh, IYl */
+		static int FD_65() {
 			IY.High = IY.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_66() {/* LD H, (IY+d) */
-			HL.High = VGA.PEEK8(GetIYdd());
-			return (4);
+		static int FD_66() {
+			HL.High = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int FD_67() {/* LD IYh, A */
+		static int FD_67() {
 			IY.High = AF.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_68() {/* LD IYl, B */
+		static int FD_68() {
 			IY.Low = BC.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_69() {/* LD IYl, C */
+		static int FD_69() {
 			IY.Low = BC.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_6A() {/* LD IYl, D */
+		static int FD_6A() {
 			IY.Low = DE.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_6B() {/* LD IYl, E */
+		static int FD_6B() {
 			IY.Low = DE.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_6C() {/* LD IYl, IYH */
+		static int FD_6C() {
 			IY.Low = IY.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_6E() {/* LD L, (IY+d) */
-			HL.Low = VGA.PEEK8(GetIYdd());
-			return (4);
+		static int FD_6E() {
+			HL.Low = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
 		}
 
-
-		static int FD_6F() {/* LD IYl, A */
+		static int FD_6F() {
 			IY.Low = AF.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_70() {/* LD (IY+d), B */
-			VGA.POKE8(GetIYdd(), BC.High);
-			return (4);
+		static int FD_70() {
+			VGA.POKE8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)), BC.High);
+			return 4;
 		}
 
-
-		static int FD_71() {/* LD (IY+d), C */
-			VGA.POKE8(GetIYdd(), BC.Low);
-			return (4);
+		static int FD_71() {
+			VGA.POKE8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)), BC.Low);
+			return 4;
 		}
 
-
-		static int FD_72() {/* LD (IY+d), D */
-			VGA.POKE8(GetIYdd(), DE.High);
-			return (4);
+		static int FD_72() {
+			VGA.POKE8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)), DE.High);
+			return 4;
 		}
 
-
-		static int FD_73() {/* LD (IY+d), E */
-			VGA.POKE8(GetIYdd(), DE.Low);
-			return (4);
+		static int FD_73() {
+			VGA.POKE8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)), DE.Low);
+			return 4;
 		}
 
-
-		static int FD_74() {/* LD (IY+d), H */
-			VGA.POKE8(GetIYdd(), HL.High);
-			return (4);
+		static int FD_74() {
+			VGA.POKE8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)), HL.High);
+			return 4;
 		}
 
-
-		static int FD_75() {/* LD (IY+d), L */
-			VGA.POKE8(GetIYdd(), HL.Low);
-			return (4);
+		static int FD_75() {
+			VGA.POKE8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)), HL.Low);
+			return 4;
 		}
 
-
-		static int FD_77() {/* LD (IY+d), A */
-			VGA.POKE8(GetIYdd(), AF.High);
-			return (4);
+		static int FD_77() {
+			VGA.POKE8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)), AF.High);
+			return 4;
 		}
 
+		static int FD_7E() {
+			AF.High = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)));
+			return 4;
+		}
 
-		static int FD_7C() {/* LD A, IYh */
+		static int FD_7C() {
 			AF.High = IY.High;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_7D() {/* LD A, IYl */
+		static int FD_7D() {
 			AF.High = IY.Low;
-			return (1);
+			return 1;
 		}
 
-
-		static int FD_7E() {/* LD A, (IY+d) */
-			AF.High = VGA.PEEK8(GetIYdd());
-			return (4);
+		static int FD_84() {
+			int z = AF.High + IY.High, c = AF.High ^ IY.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
 		}
 
-
-		static int FD_84() {/* ADD A, IYh */
-			return ADD_R8(IY.High, 0);
+		static int FD_85() {
+			int z = AF.High + IY.Low, c = AF.High ^ IY.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
 		}
 
-
-		static int FD_85() {/* ADD A, IYl */
-			return ADD_R8(IY.Low, 0);
+		static int FD_86() {
+			int x = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High + x, c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 4;
 		}
 
-
-		static int FD_86() {/* ADD A, (IY+n) */
-			ADD_R8(VGA.PEEK8(GetIYdd()), 0);
-			return (4);
+		static int FD_8C() {
+			int z = AF.High + IY.High + (AF.Low & FLAG_C), c = AF.High ^ IY.High ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
 		}
 
-
-		static int FD_8C() {/* ADC A, IYh */
-			return ADD_R8(IY.High, AF.Low);
+		static int FD_8D() {
+			int z = AF.High + IY.Low + (AF.Low & FLAG_C), c = AF.High ^ IY.Low ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 1;
 		}
 
-
-		static int FD_8D() {/* ADC A, IYl */
-			return ADD_R8(IY.Low, AF.Low);
+		static int FD_8E() {
+			int x = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High + x + (AF.Low & FLAG_C), c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYX[AF.High = (byte)z] | TabHVC[c]);
+			return 4;
 		}
 
-
-		static int FD_8E() {/* ADC A, (IY+n) */
-			ADD_R8(VGA.PEEK8(GetIYdd()), AF.Low);
-			return (4);
+		static int FD_94() {
+			int z = AF.High - IY.High, c = AF.High ^ IY.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
 		}
 
-
-		static int FD_94() {/* SUB IYh */
-			return SUB_R8(IY.High, 0);
+		static int FD_95() {
+			int z = AF.High - IY.Low, c = AF.High ^ IY.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
 		}
 
-
-		static int FD_95() {/* SUB IYl */
-			return SUB_R8(IY.Low, 0);
+		static int FD_96() {
+			int x = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High - x, c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 4;
 		}
 
-
-		static int FD_96() {/* SUB (IY+n) */
-			SUB_R8(VGA.PEEK8(GetIYdd()), 0);
-			return (4);
+		static int FD_9C() {
+			int z = AF.High - IY.High - (AF.Low & FLAG_C), c = AF.High ^ IY.High ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
 		}
 
-
-		static int FD_9C() {/* SBC A, IYh */
-			return SUB_R8(IY.High, AF.Low);
+		static int FD_9D() {
+			int z = AF.High - IY.Low - (AF.Low & FLAG_C), c = AF.High ^ IY.Low ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 1;
 		}
 
-
-		static int FD_9D() {/* SBC A, IYl */
-			return SUB_R8(IY.Low, AF.Low);
+		static int FD_9E() {
+			int x = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High - x - (AF.Low & FLAG_C), c = AF.High ^ x ^ z;
+			AF.Low = (byte)(TabSZYXN[AF.High = (byte)z] | TabHVC[c & 0x190]);
+			return 4;
 		}
 
-
-		static int FD_9E() {/* SBC A, (IY+n) */
-			SUB_R8(VGA.PEEK8(GetIYdd()), AF.Low);
-			return (4);
+		static int FD_A4() {
+			AF.Low = TabSZYXHP[AF.High &= IY.High];
+			return 1;
 		}
 
-
-		static int FD_A4() {/* AND IYh */
-			return AND_R8(IY.High);
+		static int FD_A5() {
+			AF.Low = TabSZYXHP[AF.High &= IY.Low];
+			return 1;
 		}
 
-
-		static int FD_A5() {/* AND IYl */
-			return AND_R8(IY.Low);
+		static int FD_A6() {
+			AF.Low = TabSZYXHP[AF.High &= VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)))];
+			return 4;
 		}
 
-
-		static int FD_A6() {/* AND (IY+n) */
-			AND_R8(VGA.PEEK8(GetIYdd()));
-			return (4);
+		static int FD_AC() {
+			AF.Low = TabSZYXP[AF.High ^= IY.High];
+			return 1;
 		}
 
-
-		static int FD_AC() {/* XOR IYh */
-			return XOR_R8(IY.High);
+		static int FD_AD() {
+			AF.Low = TabSZYXP[AF.High ^= IY.Low];
+			return 1;
 		}
 
-
-		static int FD_AD() {/* XOR IYl */
-			return XOR_R8(IY.Low);
+		static int FD_AE() {
+			AF.Low = TabSZYXP[AF.High ^= VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)))];
+			return 4;
 		}
 
-
-		static int FD_AE() {/* XOR (IY+n) */
-			XOR_R8(VGA.PEEK8(GetIYdd()));
-			return (4);
+		static int FD_B4() {
+			AF.Low = TabSZYXP[AF.High |= IY.High];
+			return 1;
 		}
 
-
-		static int FD_B4() {/* OR IYh */
-			return OR_R8(IY.High);
+		static int FD_B5() {
+			AF.Low = TabSZYXP[AF.High |= IY.Low];
+			return 1;
 		}
 
-
-		static int FD_B5() {/* OR IYl */
-			return OR_R8(IY.Low);
+		static int FD_B6() {
+			AF.Low = TabSZYXP[AF.High |= VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++)))];
+			return 4;
 		}
 
-
-		static int FD_B6() {/* OR (IY+n) */
-			OR_R8(VGA.PEEK8(GetIYdd()));
-			return (4);
+		static int FD_BC() {
+			int z = AF.High - IY.High;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (IY.High & FLAGS_53) | TabHVC[(AF.High ^ IY.High ^ z) & 0x190]);
+			return 1;
 		}
 
-
-		static int FD_BC() {/* CP IYh */
-			return CP_R8(IY.High);
+		static int FD_BD() {
+			int z = AF.High - IY.Low;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (IY.Low & FLAGS_53) | TabHVC[(AF.High ^ IY.Low ^ z) & 0x190]);
+			return 1;
 		}
 
-
-		static int FD_BD() {/* CP IYl */
-			return CP_R8(IY.Low);
+		static int FD_BE() {
+			int x = VGA.PEEK8((ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++))), z = AF.High - x;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (x & FLAGS_53) | TabHVC[(AF.High ^ x ^ z) & 0x190]);
+			return 4;
 		}
 
-
-		static int FD_BE() {/* CP (IY+n) */
-			CP_R8(VGA.PEEK8(GetIYdd()));
-			return (4);
+		static int FD_CB() {
+			IR.Low ^= (byte)(((IR.Low + 1) ^ IR.Low) & 0x7F);
+			d = (ushort)(IY.Word + (sbyte)VGA.PEEK8(PC.Word++));
+			return TabInstrCBFD[LastInstr = VGA.PEEK8(PC.Word++)]();
 		}
 
-
-		static int FD_CB() {/* special code CB */
-			int k;
-			AdrCB = (ushort)GetIYdd();
-			k = VGA.PEEK8(PC.Word++);
-			//Log(MODULENAME, "Instruction #FD,#CB,#%02X,#%02X (PC=#%04X)", VGA.PEEK8(PC.Word - 2), k, PC.Word - 4, LOG_DEBUG);
-			if (k > 0x3F && k < 0x80)
-				k = (k & 0xF8) | 0x06;
-			CBIndex = true;
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			tabCB[k]();
-			CBIndex = false;
-			return (k > 0x3F && k < 0x80 ? 5 : 6); // ### a vérifier...
+		static int FC_04() {
+			int x = IY.High << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[IY.High = (byte)(x | c)] | c);
+			return 2;
 		}
 
-
-		static int FD_DD() {/* special FD_DD */
-			// Se comporte comme un simple DD
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			return (tabIX[VGA.PEEK8(PC.Word++)]()); // ### A vérifier
+		static int FC_05() {
+			int x = IY.Low << 1, c = x >> 8;
+			AF.Low = (byte)(TabSZYXP[IY.Low = (byte)(x | c)] | c);
+			return 2;
 		}
 
-
-		static int FD_E1() {/* POP IY */
-			IY.Word = POP();
-			return (3);
+		static int FC_0C() {
+			int c = IY.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[IY.High = (byte)((IY.High >>= 1) | (c << 7))] | c);
+			return 2;
 		}
 
+		static int FC_0D() {
+			int c = IY.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[IY.Low = (byte)((IY.Low >>= 1) | (c << 7))] | c);
+			return 2;
+		}
 
-		static int FD_E3() {/* EX (SP), IY */
-			MemPtr.Word = VGA.PEEK16(SP.Word);
+		static int FC_14() {
+			int x = (AF.Low & FLAG_C) | IY.High << 1;
+			AF.Low = (byte)(TabSZYXP[IY.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int FC_15() {
+			int x = (AF.Low & FLAG_C) | IY.Low << 1;
+			AF.Low = (byte)(TabSZYXP[IY.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int FC_1C() {
+			int c = IY.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[IY.High = (byte)((IY.High >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int FC_1D() {
+			int c = IY.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[IY.Low = (byte)((IY.Low >>= 1) | (AF.Low << 7))] | c);
+			return 2;
+		}
+
+		static int FC_24() {
+			int x = IY.High << 1;
+			AF.Low = (byte)(TabSZYXP[IY.High = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int FC_25() {
+			int x = IY.Low << 1;
+			AF.Low = (byte)(TabSZYXP[IY.Low = (byte)x] | (x >> 8));
+			return 2;
+		}
+
+		static int FC_2C() {
+			int c = IY.High & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[IY.High = (byte)(((sbyte)IY.High) >> 1)]);
+			return 2;
+		}
+
+		static int FC_2D() {
+			int c = IY.Low & 0x01;
+			AF.Low = (byte)(c | TabSZYXP[IY.Low = (byte)(((sbyte)IY.Low) >> 1)]);
+			return 2;
+		}
+
+		static int FC_34() {
+			int x = IY.High << 1;
+			AF.Low = (byte)(TabSZYXP[IY.High = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int FC_35() {
+			int x = IY.Low << 1;
+			AF.Low = (byte)(TabSZYXP[IY.Low = (byte)(x | 0x01)] | (x >> 8));
+			return 2;
+		}
+
+		static int FC_3C() {
+			int c = IY.High & 0x01;
+			AF.Low = (byte)(TabSZYXP[IY.High = (byte)(IY.High >> 1)] | c);
+			return 2;
+		}
+
+		static int FC_3D() {
+			int c = IY.Low & 0x01;
+			AF.Low = (byte)(TabSZYXP[IY.Low = (byte)(IY.Low >> 1)] | c);
+			return 2;
+		}
+
+		static int FC_44() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[IY.High & 1 << ((LastInstr >> 3) & 0x07)] | (IY.High & FLAGS_53));
+			return 2;
+		}
+
+		static int FC_45() {
+			AF.Low = (byte)((AF.Low & FLAG_C) | TabSR[IY.Low & 1 << ((LastInstr >> 3) & 0x07)] | (IY.Low & FLAGS_53));
+			return 2;
+		}
+
+		static int FC_84() {
+			IY.High &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int FC_85() {
+			IY.Low &= (byte)~(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int FC_C4() {
+			IY.High |= (byte)(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int FC_C5() {
+			IY.Low |= (byte)(1 << ((LastInstr >> 3) & 0x07));
+			return 2;
+		}
+
+		static int FD_E1() {
+			IY.Word = VGA.PEEK16(SP.Word);
+			SP.Word += 2;
+			SupIrqWaitState = 1;
+			return 3;
+		}
+
+		static int FD_E3() {
+			memPtr = VGA.PEEK16(SP.Word);
 			VGA.POKE16(SP.Word, IY.Word);
-			IY.Word = MemPtr.Word;
-			SupIrqWaitState = 1;
-			return (6);
+			IY.Word = memPtr;
+			SupIrqWaitState = 2;
+			return 6;
 		}
 
-
-		static int FD_E5() {/* PUSH IY */
-			return PUSH(IY.Word);
+		static int FD_E5() {
+			SP.Word -= 2;
+			VGA.POKE16(SP.Word, IY.Word);
+			return 4;
 		}
 
-
-		static int FD_E9() {/* JP (IY) */
-			PC = IY;
-			return (1);
+		static int FD_E9() {
+			PC.Word = IY.Word;
+			return 1;
 		}
 
-
-		static int FD_F9() {/* LD SP, IY */
+		static int FD_F9() {
 			SP.Word = IY.Word;
-			SupIrqWaitState = 1;
-			return (2);
+			return 2;
 		}
 
-
-		/*******************
-	   * OPCODE Standards *
-	   *******************/
-
-
-		static int NO_OP() {
-			return (1);
-		}
-
-
-		static int ___01() {/* LD BC, nnnn */
-			BC.Word = (ushort)VGA.PEEK16(PC.Word);
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___02() {/* LD ( BC ), A */
-			VGA.POKE8(BC.Word, AF.High);
-			MemPtr.Word = (ushort)(((BC.Word + 1) & 0xFF) + (AF.High << 8));
-			return (2);
-		}
-
-
-		static int ___03() {/* INC BC */
-
-			BC.Word++;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___04() {/* INC B */
-			return FLAG_INC(++BC.High);
-		}
-
-
-		static int ___05() {/* DEC B */
-			return FLAG_DEC(--BC.High);
-		}
-
-
-		static int ___06() {/* LD B, n */
-			BC.High = VGA.PEEK8(PC.Word++);
-			return (2);
-		}
-
-
-		static int ___07() {/* RLCA */
-			AF.Low = (byte)((AF.Low & (FLAG_S | FLAG_Z | FLAG_V)) | (AF.High >> 7));
-			AF.High = (byte)((AF.High << 1) | (AF.Low & FLAG_C));
-			AF.Low |= (byte)(AF.High & (FLAG_5 | FLAG_3));
-			return (1);
-		}
-
-
-		static int ___08() {/* EX AF, AF' */
-			ushort tmp = AF.Word;
-			AF = _AF;
-			_AF.Word = tmp;
-			return (1);
-		}
-
-
-		static int ___09() {/* ADD HL, BC */
-			return ADD_R16(ref HL.Word, BC.Word);
-		}
-
-
-		static int ___0A() {/* LD A, ( BC ) */
-			AF.High = VGA.PEEK8(BC.Word);
-			MemPtr.Word = (ushort)(BC.Word + 1);
-			return (2);
-		}
-
-
-		static int ___0B() {/* DEC BC */
-			BC.Word--;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___0C() {/* INC C */
-			return FLAG_INC(++BC.Low);
-		}
-
-
-		static int ___0D() {/* DEC C */
-			return FLAG_DEC(--BC.Low);
-		}
-
-
-		static int ___0E() {/* LD C, n */
-			BC.Low = VGA.PEEK8(PC.Word++);
-			return (2);
-		}
-
-
-		static int ___0F() {/* RRCA */
-			AF.Low = (byte)((AF.Low & (FLAG_S | FLAG_Z | FLAG_V)) | (AF.High & FLAG_C));
-			AF.High = (byte)((AF.High >> 1) | (AF.Low << 7));
-			AF.Low |= (byte)(AF.High & (FLAG_5 | FLAG_3));
-			return (1);
-		}
-
-
-		static int ___10() {/* DJNZ e */
-			int r = 3;
-			if ((--BC.High) != 0) {
-				int ofs = VGA.PEEK8(PC.Word);
-				PC.Word = (ushort)(PC.Word + (ofs > 127 ? ofs - 256 : ofs));
-				MemPtr.Word = ++PC.Word;
-				r++;
-			}
-			else
-				PC.Word++;
-
-			return (r);
-		}
-
-
-		static int ___11() {/* LD DE, nnnn */
-			DE.Word = VGA.PEEK16(PC.Word);
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___12() {/* LD ( DE ), A */
-			VGA.POKE8(DE.Word, AF.High);
-			MemPtr.Word = (ushort)(((DE.Word + 1) & 0xFF) + (AF.High << 8));
-			return (2);
-		}
-
-
-		static int ___13() {/* INC DE */
-			DE.Word++;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___14() {/* INC D */
-			return FLAG_INC(++DE.High);
-		}
-
-
-		static int ___15() {/* DEC D */
-			return FLAG_DEC(--DE.High);
-		}
-
-
-		static int ___16() {/* LD D, n */
-			DE.High = VGA.PEEK8(PC.Word++);
-			return (2);
-		}
-
-
-		static int ___17() {/* RLA */
-			int i = AF.High << 1;
-			AF.High = (byte)(i | (AF.Low & FLAG_C));
-			AF.Low = (byte)((AF.Low & (FLAG_S | FLAG_Z | FLAG_V)) | (i >> 8) | (AF.High & (FLAG_5 | FLAG_3)));
-			return (1);
-		}
-
-
-		static int ___18() {/* JR e */
-			int ofs = VGA.PEEK8(PC.Word);
-			PC.Word = (ushort)(PC.Word + (ofs > 127 ? ofs - 256 : ofs));
-			MemPtr.Word = (ushort)(++PC.Word);
-			return (3);
-		}
-
-
-		static int ___19() {/* ADD HL, DE */
-			return ADD_R16(ref HL.Word, DE.Word);
-		}
-
-
-		static int ___1A() {/* LD A, ( DE ) */
-			AF.High = VGA.PEEK8(DE.Word);
-			MemPtr.Word = (ushort)(DE.Word + 1);
-			return (2);
-		}
-
-
-		static int ___1B() {/* DEC DE */
-			DE.Word--;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___1C() {/* INC E */
-			return FLAG_INC(++DE.Low);
-		}
-
-
-		static int ___1D() {/* DEC E */
-			return FLAG_DEC(--DE.Low);
-		}
-
-
-		static int ___1E() {/* LD E, n */
-			DE.Low = VGA.PEEK8(PC.Word++);
-			return (2);
-		}
-
-
-		static int ___1F() {/* RRA */
-			int i = (AF.High >> 1) | ((AF.Low << 7) & 128);
-			AF.Low = (byte)((AF.Low & (FLAG_S | FLAG_Z | FLAG_V)) | (AF.High & FLAG_C) | (i & (FLAG_5 | FLAG_3)));
-			AF.High = (byte)i;
-			return (1);
-		}
-
-
-		static int ___20() {/* JR NZ, e */
-			int r = 2;
-			if ((AF.Low & FLAG_Z) == 0) {
-				int ofs = VGA.PEEK8(PC.Word);
-				PC.Word = (ushort)(PC.Word + (ofs > 127 ? ofs - 256 : ofs));
-				MemPtr.Word = ++PC.Word;
-				r++;
-			}
-			else
-				PC.Word++;
-
-			return (r);
-		}
-
-
-		static int ___21() {/* LD HL, nnnn */
-			HL.Word = VGA.PEEK16(PC.Word);
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___22() {/* LD ( nnnn ), HL */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			VGA.POKE16(MemPtr.Word, HL.Word);
-			MemPtr.Word++;
-			PC.Word += 2;
-			return (5);
-		}
-
-
-		static int ___23() {/* INC HL */
-			HL.Word++;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___24() {/* INC H */
-			return FLAG_INC(++HL.High);
-		}
-
-
-		static int ___25() {/* DEC H */
-			return FLAG_DEC(--HL.High);
-		}
-
-
-		static int ___26() {/* LD H, n */
-			HL.High = VGA.PEEK8(PC.Word++);
-			return (2);
-		}
-
-
-		static int ___27() {/* DAA */
-			int f = AF.Low;
-			byte add = (byte)(((AF.High & 0x0F) > 9) || ((f & FLAG_H) != 0) ? 0x06 : 0);
-			if (((f & FLAG_C) != 0) || AF.High > 0x99) {
-				f |= FLAG_C;
-				add |= 0x60;
-			}
-			if ((f & FLAG_N) != 0)
-				SUB_R8(add, 0);
-			else
-				ADD_R8(add, 0);
-
-			AF.Low = (byte)(AF.Low & (~(FLAG_C | FLAG_V)) | (f & FLAG_C) | Parite[AF.High]);
-			return (1);
-		}
-
-
-		static int ___28() {/* JR Z, e */
-			int r = 2;
-			if ((AF.Low & FLAG_Z) != 0) {
-				int ofs = VGA.PEEK8(PC.Word);
-				PC.Word = (ushort)(PC.Word + (ofs > 127 ? ofs - 256 : ofs));
-				MemPtr.Word = ++PC.Word;
-				r++;
-			}
-			else
-				PC.Word++;
-
-			return (r);
-		}
-
-
-		static int ___29() {/* ADD HL, HL */
-			return ADD_R16(ref HL.Word, HL.Word);
-		}
-
-
-		static int ___2A() {/* LD HL, ( nnnn ) */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			HL.Word = VGA.PEEK16(MemPtr.Word++);
-			PC.Word += 2;
-			return (5);
-		}
-
-
-		static int ___2B() {/* DEC HL */
-			HL.Word--;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___2C() {/* INC L */
-			return FLAG_INC(++HL.Low);
-		}
-
-
-		static int ___2D() {/* DEC L */
-			return FLAG_DEC(--HL.Low);
-		}
-
-
-		static int ___2E() {/* LD L, n */
-			HL.Low = VGA.PEEK8(PC.Word++);
-			return (2);
-		}
-
-
-		static int ___2F() {/* CPL */
-			AF.High ^= 0xFF;
-			AF.Low = (byte)(AF.Low & N_FLAG_5 & N_FLAG_3 | (AF.High & (FLAG_5 | FLAG_3)) | FLAG_H | FLAG_N);
-			return (1);
-		}
-
-
-		static int ___30() {/* JR NC, e */
-			int r = 2;
-			if ((AF.Low & FLAG_C) == 0) {
-				int ofs = VGA.PEEK8(PC.Word);
-				PC.Word = (ushort)(PC.Word + (ofs > 127 ? ofs - 256 : ofs));
-				MemPtr.Word = ++PC.Word;
-				r++;
-			}
-			else
-				PC.Word++;
-
-			return (r);
-		}
-
-
-		static int ___31() {/* LD SP, nnnn */
-			SP.Word = VGA.PEEK16(PC.Word);
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___32() {/* LD ( nnnn ), A */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			VGA.POKE8(MemPtr.Word++, AF.High);
-			MemPtr.High = AF.High;
-			PC.Word += 2;
-			return (4);
-		}
-
-
-		static int ___33() {/* INC SP */
-			SP.Word++;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___34() {/* INC ( HL ) */
-			byte r = VGA.PEEK8(HL.Word);
-			FLAG_INC(++r);
-			VGA.POKE8(HL.Word, r);
-			return (3);
-		}
-
-
-		static int ___35() {/* DEC ( HL ) */
-			byte r = VGA.PEEK8(HL.Word);
-			FLAG_DEC(--r);
-			VGA.POKE8(HL.Word, r);
-			return (3);
-		}
-
-
-		static int ___36() {/* LD ( HL ), n */
-			VGA.POKE8(HL.Word, VGA.PEEK8(PC.Word++));
-			return (3);
-		}
-
-
-		static int ___37() {/* SCF */
-			AF.Low = (byte)(((AF.Low | FLAG_C) & (N_FLAG_N & N_FLAG_3 & N_FLAG_H & N_FLAG_5)) | (AF.High & (FLAG_5 | FLAG_3)));
-			return (1);
-		}
-
-
-		static int ___38() {/* JR C, e */
-			int r = 2;
-			if ((AF.Low & FLAG_C) != 0) {
-				int ofs = VGA.PEEK8(PC.Word);
-				PC.Word = (ushort)(PC.Word + (ofs > 127 ? ofs - 256 : ofs));
-				MemPtr.Word = ++PC.Word;
-				r++;
-			}
-			else
-				PC.Word++;
-
-			return (r);
-		}
-
-
-		static int ___39() {/* ADD HL, SP */
-			return ADD_R16(ref HL.Word, SP.Word);
-		}
-
-
-		static int ___3A() {/* LD A, ( nnnn ) */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			AF.High = VGA.PEEK8(MemPtr.Word++);
-			PC.Word += 2;
-			return (4);
-		}
-
-
-		static int ___3B() {/* DEC SP */
-			SP.Word--;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___3C() {/* INC A */
-			return FLAG_INC(++AF.High);
-		}
-
-
-		static int ___3D() {/* DEC A */
-			return FLAG_DEC(--AF.High);
-		}
-
-
-		static int ___3E() {/* LD A, ee */
-			AF.High = VGA.PEEK8(PC.Word++);
-			return (2);
-		}
-
-
-		static int ___3F() {/* CCF */
-			int tmp = (AF.Low & FLAG_C) << 4;
-			AF.Low = (byte)(((AF.Low & (N_FLAG_N & N_FLAG_3 & N_FLAG_H & N_FLAG_5)) ^ FLAG_C) | (AF.High & (FLAG_5 | FLAG_3)) | tmp);
-			return (1);
-		}
-
-
-		static int ___41() {/* LD B, C */
-			BC.High = BC.Low;
-			return (1);
-		}
-
-
-		static int ___42() {/* LD B, D */
-			BC.High = DE.High;
-			return (1);
-		}
-
-
-		static int ___43() {/* LD B, E */
-			BC.High = DE.Low;
-			return (1);
-		}
-
-
-		static int ___44() {/* LD B, H */
-			BC.High = HL.High;
-			return (1);
-		}
-
-
-		static int ___45() {/* LD B, L */
-			BC.High = HL.Low;
-			return (1);
-		}
-
-
-		static int ___46() {/* LD B, ( HL ) */
-			BC.High = VGA.PEEK8(HL.Word);
-			return (2);
-		}
-
-
-		static int ___47() {/* LD B, A */
-			BC.High = AF.High;
-			return (1);
-		}
-
-
-		static int ___48() {/* LD C, B */
-			BC.Low = BC.High;
-			return (1);
-		}
-
-
-		static int ___4A() {/* LD C, D */
-			BC.Low = DE.High;
-			return (1);
-		}
-
-
-		static int ___4B() {/* LD C, E */
-			BC.Low = DE.Low;
-			return (1);
-		}
-
-
-		static int ___4C() {/* LD C, H */
-			BC.Low = HL.High;
-			return (1);
-		}
-
-
-		static int ___4D() {/* LD C, L */
-			BC.Low = HL.Low;
-			return (1);
-		}
-
-
-		static int ___4E() {/* LD C, ( HL ) */
-			BC.Low = VGA.PEEK8(HL.Word);
-			return (2);
-		}
-
-
-		static int ___4F() {/* LD C, A */
-			BC.Low = AF.High;
-			return (1);
-		}
-
-
-		static int ___50() {/* LD D, B */
-			DE.High = BC.High;
-			return (1);
-		}
-
-
-		static int ___51() {/* LD D, C */
-			DE.High = BC.Low;
-			return (1);
-		}
-
-
-		static int ___53() {/* LD D, E */
-			DE.High = DE.Low;
-			return (1);
-		}
-
-
-		static int ___54() {/* LD D, H */
-			DE.High = HL.High;
-			return (1);
-		}
-
-
-		static int ___55() {/* LD D, L */
-			DE.High = HL.Low;
-			return (1);
-		}
-
-
-		static int ___56() {/* LD D, ( HL ) */
-			DE.High = VGA.PEEK8(HL.Word);
-			return (2);
-		}
-
-
-		static int ___57() {/* LD D, A */
-			DE.High = AF.High;
-			return (1);
-		}
-
-
-		static int ___58() {/* LD E, B */
-			DE.Low = BC.High;
-			return (1);
-		}
-
-
-		static int ___59() {/* LD E, C */
-			DE.Low = BC.Low;
-			return (1);
-		}
-
-
-		static int ___5A() {/* LD E, D */
-			DE.Low = DE.High;
-			return (1);
-		}
-
-
-		static int ___5C() {/* LD E, H */
-			DE.Low = HL.High;
-			return (1);
-		}
-
-
-		static int ___5D() {/* LD E, L */
-			DE.Low = HL.Low;
-			return (1);
-		}
-
-
-		static int ___5E() {/* LD E, ( HL ) */
-			DE.Low = VGA.PEEK8(HL.Word);
-			return (2);
-		}
-
-
-		static int ___5F() {/* LD E, A */
-			DE.Low = AF.High;
-			return (1);
-		}
-
-
-		static int ___60() {/* LD H, B */
-			HL.High = BC.High;
-			return (1);
-		}
-
-
-		static int ___61() {/* LD H, C */
-			HL.High = BC.Low;
-			return (1);
-		}
-
-
-		static int ___62() {/* LD H, D */
-			HL.High = DE.High;
-			return (1);
-		}
-
-
-		static int ___63() {/* LD H, E */
-			HL.High = DE.Low;
-			return (1);
-		}
-
-
-		static int ___65() {/* LD H, L */
-			HL.High = HL.Low;
-			return (1);
-		}
-
-
-		static int ___66() {/* LD H, ( HL ) */
-			HL.High = VGA.PEEK8(HL.Word);
-			return (2);
-		}
-
-
-		static int ___67() {/* LD H, A */
-			HL.High = AF.High;
-			return (1);
-		}
-
-
-		static int ___68() {/* LD L, B */
-			HL.Low = BC.High;
-			return (1);
-		}
-
-
-		static int ___69() {/* LD L, C */
-			HL.Low = BC.Low;
-			return (1);
-		}
-
-
-		static int ___6A() {/* LD L, D */
-			HL.Low = DE.High;
-			return (1);
-		}
-
-
-		static int ___6B() {/* LD L, E */
-			HL.Low = DE.Low;
-			return (1);
-		}
-
-
-		static int ___6C() {/* LD L, H */
-			HL.Low = HL.High;
-			return (1);
-		}
-
-
-		static int ___6E() {/* LD L, ( HL ) */
-			HL.Low = VGA.PEEK8(HL.Word);
-			return (2);
-		}
-
-
-		static int ___6F() {/* LD L, A */
-			HL.Low = AF.High;
-			return (1);
-		}
-
-
-		static int ___70() {/* LD ( HL ), B */
-			VGA.POKE8(HL.Word, BC.High);
-			return (2);
-		}
-
-
-		static int ___71() {/* LD ( HL ), C */
-			VGA.POKE8(HL.Word, BC.Low);
-			return (2);
-		}
-
-
-		static int ___72() {/* LD ( HL ), D */
-			VGA.POKE8(HL.Word, DE.High);
-			return (2);
-		}
-
-
-		static int ___73() {/* LD ( HL ), E */
-			VGA.POKE8(HL.Word, DE.Low);
-			return (2);
-		}
-
-
-		static int ___74() {/* LD ( HL ), H */
-			VGA.POKE8(HL.Word, HL.High);
-			return (2);
-		}
-
-
-		static int ___75() {/* LD ( HL ), L */
-			VGA.POKE8(HL.Word, HL.Low);
-			return (2);
-		}
-
-		static int ___76() {/* HALT */
-			PC.Word--;
-			Halt = 1;
-			return (1);
-		}
-
-
-		static int ___77() {/* LD ( HL ), A */
-			VGA.POKE8(HL.Word, AF.High);
-			return (2);
-		}
-
-
-		static int ___78() {/* LD A, B */
-			AF.High = BC.High;
-			return (1);
-		}
-
-
-		static int ___79() {/* LD A, C */
-			AF.High = BC.Low;
-			return (1);
-		}
-
-
-		static int ___7A() {/* LD A, D */
-			AF.High = DE.High;
-			return (1);
-		}
-
-
-		static int ___7B() {/* LD A, E */
-			AF.High = DE.Low;
-			return (1);
-		}
-
-
-		static int ___7C() {/* LD A, H */
-			AF.High = HL.High;
-			return (1);
-		}
-
-
-		static int ___7D() {/* LD A, L */
-			AF.High = HL.Low;
-			return (1);
-		}
-
-
-		static int ___7E() {/* LD A, ( HL ) */
-			AF.High = VGA.PEEK8(HL.Word);
-			return (2);
-		}
-
-
-		static int ___80() {/* ADD A, B */
-			return ADD_R8(BC.High, 0);
-		}
-
-
-		static int ___81() {/* ADD A, C */
-			return ADD_R8(BC.Low, 0);
-		}
-
-
-		static int ___82() {/* ADD A, D */
-			return ADD_R8(DE.High, 0);
-		}
-
-
-		static int ___83() {/* ADD A, E */
-			return ADD_R8(DE.Low, 0);
-		}
-
-
-		static int ___84() {/* ADD A, H */
-			return ADD_R8(HL.High, 0);
-		}
-
-
-		static int ___85() {/* ADD A, L */
-			return ADD_R8(HL.Low, 0);
-		}
-
-
-		static int ___86() {/* ADD A, ( HL ) */
-			ADD_R8(VGA.PEEK8(HL.Word), 0);
-			return (2);
-		}
-
-
-		static int ___87() {/* ADD A, A */
-			return ADD_R8(AF.High, 0);
-		}
-
-
-		static int ___88() {/* ADC A, B */
-			return ADD_R8(BC.High, AF.Low);
-		}
-
-
-		static int ___89() {/* ADC A, C */
-			return ADD_R8(BC.Low, AF.Low);
-		}
-
-
-		static int ___8A() {/* ADC A, D */
-			return ADD_R8(DE.High, AF.Low);
-		}
-
-
-		static int ___8B() {/* ADC A, E */
-			return ADD_R8(DE.Low, AF.Low);
-		}
-
-
-		static int ___8C() {/* ADC A, H */
-			return ADD_R8(HL.High, AF.Low);
-		}
-
-
-		static int ___8D() {/* ADC A, L */
-			return ADD_R8(HL.Low, AF.Low);
-		}
-
-
-		static int ___8E() {/* ADC A, (HL) */
-			ADD_R8(VGA.PEEK8(HL.Word), AF.Low);
-			return (2);
-		}
-
-
-		static int ___8F() {/* ADC A, A */
-			return ADD_R8(AF.High, AF.Low);
-		}
-
-
-		static int ___90() {/* SUB B */
-			return SUB_R8(BC.High, 0);
-		}
-
-
-		static int ___91() {/* SUB C */
-			return SUB_R8(BC.Low, 0);
-		}
-
-
-		static int ___92() {/* SUB D */
-			return SUB_R8(DE.High, 0);
-		}
-
-
-		static int ___93() {/* SUB E */
-			return SUB_R8(DE.Low, 0);
-		}
-
-
-		static int ___94() {/* SUB H */
-			return SUB_R8(HL.High, 0);
-		}
-
-
-		static int ___95() {/* SUB L */
-			return SUB_R8(HL.Low, 0);
-		}
-
-
-		static int ___96() {/* SUB (HL) */
-			SUB_R8(VGA.PEEK8(HL.Word), 0);
-			return (2);
-		}
-
-
-		static int ___97() {/* SUB A */
-			return SUB_R8(AF.High, 0);
-		}
-
-
-		static int ___98() {/* SBC A, B */
-			return SUB_R8(BC.High, AF.Low);
-		}
-
-
-		static int ___99() {/* SBC A, C */
-			return SUB_R8(BC.Low, AF.Low);
-		}
-
-
-		static int ___9A() {/* SBC A, D */
-			return SUB_R8(DE.High, AF.Low);
-		}
-
-
-		static int ___9B() {/* SBC A, E */
-			return SUB_R8(DE.Low, AF.Low);
-		}
-
-
-		static int ___9C() {/* SBC A, H */
-			return SUB_R8(HL.High, AF.Low);
-		}
-
-
-		static int ___9D() {/* SBC A, L */
-			return SUB_R8(HL.Low, AF.Low);
-		}
-
-
-		static int ___9E() {/* SBC A, (HL) */
-			SUB_R8(VGA.PEEK8(HL.Word), AF.Low);
-			return (2);
-		}
-
-
-		static int ___9F() {/* SBC A, A */
-			return SUB_R8(AF.High, AF.Low);
-		}
-
-
-		static int ___A0() {/* AND B */
-			return AND_R8(BC.High);
-		}
-
-
-		static int ___A1() {/* AND C */
-			return AND_R8(BC.Low);
-		}
-
-
-		static int ___A2() {/* AND D */
-			return AND_R8(DE.High);
-		}
-
-
-		static int ___A3() {/* AND E */
-			return AND_R8(DE.Low);
-		}
-
-
-		static int ___A4() {/* AND H */
-			return AND_R8(HL.High);
-		}
-
-
-		static int ___A5() {/* AND L */
-			return AND_R8(HL.Low);
-		}
-
-
-		static int ___A6() {/* AND (HL) */
-			AND_R8(VGA.PEEK8(HL.Word));
-			return (2);
-		}
-
-
-		static int ___A7() {/* AND A */
-			return AND_R8(AF.High);
-		}
-
-
-		static int ___A8() {/* XOR B */
-			return XOR_R8(BC.High);
-		}
-
-
-		static int ___A9() {/* XOR C */
-			return XOR_R8(BC.Low);
-		}
-
-
-		static int ___AA() {/* XOR D */
-			return XOR_R8(DE.High);
-		}
-
-
-		static int ___AB() {/* XOR E */
-			return XOR_R8(DE.Low);
-		}
-
-
-		static int ___AC() {/* XOR H */
-			return XOR_R8(HL.High);
-		}
-
-
-		static int ___AD() {/* XOR L */
-			return XOR_R8(HL.Low);
-		}
-
-
-		static int ___AE() {/* XOR (HL) */
-			XOR_R8(VGA.PEEK8(HL.Word));
-			return (2);
-		}
-
-
-		static int ___AF() {/* XOR A */
-			return XOR_R8(AF.High);
-		}
-
-
-		static int ___B0() {/* OR B */
-			return OR_R8(BC.High);
-		}
-
-
-		static int ___B1() {/* OR C */
-			return OR_R8(BC.Low);
-		}
-
-
-		static int ___B2() {/* OR D */
-			return OR_R8(DE.High);
-		}
-
-
-		static int ___B3() {/* OR E */
-			return OR_R8(DE.Low);
-		}
-
-
-		static int ___B4() {/* OR H */
-			return OR_R8(HL.High);
-		}
-
-
-		static int ___B5() {/* OR L */
-			return OR_R8(HL.Low);
-		}
-
-
-		static int ___B6() {/* OR (HL) */
-			OR_R8(VGA.PEEK8(HL.Word));
-			return (2);
-		}
-
-
-		static int ___B7() {/* OR A */
-			return OR_R8(AF.High);
-		}
-
-
-		static int ___B8() {/* CP B */
-			return CP_R8(BC.High);
-		}
-
-
-		static int ___B9() {/* CP C */
-			return CP_R8(BC.Low);
-		}
-
-
-		static int ___BA() {/* CP D */
-			return CP_R8(DE.High);
-		}
-
-
-		static int ___BB() {/* CP E */
-			return CP_R8(DE.Low);
-		}
-
-
-		static int ___BC() {/* CP H */
-			return CP_R8(HL.High);
-		}
-
-
-		static int ___BD() {/* CP L */
-			return CP_R8(HL.Low);
-		}
-
-
-		static int ___BE() {/* CP (HL) */
-			CP_R8(VGA.PEEK8(HL.Word));
-			return (2);
-		}
-
-
-		static int ___BF() {/* CP A */
-			AF.Low = FLAG_N | FLAG_Z;
-			return (1);
-		}
-
-
-		static int ___C0() {/* RET NZ */
-			if ((AF.Low & FLAG_Z) == 0) {
-				MemPtr.Word = PC.Word = POP();
-				return (4);
-			}
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___C1() {/* POP BC */
-			BC.Word = POP();
-			return (3);
-		}
-
-
-		static int ___C2() {/* JP NZ, nnnn */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PC.Word = (ushort)(((AF.Low & FLAG_Z) == 0) ? MemPtr.Word : PC.Word + 2);
-			return (3);
-		}
-
-
-		static int ___C3() {/* JP nnnn */
-			MemPtr.Word = PC.Word = VGA.PEEK16(PC.Word);
-			return (3);
-		}
-
-
-		static int ___C4() {/* CALL NZ, nnnn */
-			if ((AF.Low & FLAG_Z) == 0)
-				return ___CD();
-
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___C5() {/* PUSH BC */
-			return PUSH(BC.Word);
-		}
-
-
-		static int ___C6() {/* ADD A, ee */
-			ADD_R8(VGA.PEEK8(PC.Word++), 0);
-			return (2);
-		}
-
-
-		static int ___C7() {/* RST 00 */
-			return RST(0x00);
-		}
-
-
-		static int ___C8() {/* RET Z */
-			if ((AF.Low & FLAG_Z) != 0) {
-				MemPtr.Word = PC.Word = POP();
-				return (4);
-			}
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___C9() {/* RET */
-			MemPtr.Word = PC.Word = POP();
-			return (3);
-		}
-
-
-		static int ___CA() {/* JP Z, nnnn */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PC.Word = (ushort)((AF.Low & FLAG_Z) != 0 ? MemPtr.Word : PC.Word + 2);
-			return (3);
-		}
-
-
-		static int ___CB() {/* Special code CB */
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			AdrCB = HL.Word;
-			return (tabCB[VGA.PEEK8(PC.Word++)]());
-		}
-
-
-		static int ___CC() {/* CALL Z, nnnn */
-			if ((AF.Low & FLAG_Z) != 0)
-				return ___CD();
-
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___CD() {/* CALL nnnn */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PUSH((ushort)(PC.Word + 2));
-			PC.Word = MemPtr.Word;
-			return (5);
-		}
-
-
-		static int ___CE() {/* ADC A, ee */
-			ADD_R8(VGA.PEEK8(PC.Word++), AF.Low);
-			return (2);
-		}
-
-
-		static int ___CF() {/* RST 08 */
-			return RST(0x08);
-		}
-
-
-		static int ___D0() {/* RET NC */
-			if ((AF.Low & FLAG_C) == 0) {
-				MemPtr.Word = PC.Word = POP();
-				return (4);
-			}
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___D1() {/* POP DE */
-			DE.Word = POP();
-			return (3);
-		}
-
-
-		static int ___D2() {/* JP NC, nnnn */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PC.Word = (ushort)(((AF.Low & FLAG_C) == 0) ? MemPtr.Word : PC.Word + 2);
-			return (3);
-		}
-
-
-		static int ___D3() {/* OUT ( n ), A */
-			MemPtr.Low = VGA.PEEK8(PC.Word++);
-			MemPtr.High = AF.High;
-			GestPort.WritePort(MemPtr.Word++, AF.High);
-			return (3);
-		}
-
-
-		static int ___D4() {/* CALL NC, nnnn */
-			if ((AF.Low & FLAG_C) == 0)
-				return ___CD();
-
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___D5() {/* PUSH DE */
-			return PUSH(DE.Word);
-		}
-
-
-		static int ___D6() {/* SUB ee */
-			SUB_R8(VGA.PEEK8(PC.Word++), 0);
-			return (2);
-		}
-
-
-		static int ___D7() {/* RST 10 */
-			return RST(0x10);
-		}
-
-
-		static int ___D8() {/* RET C */
-			if ((AF.Low & FLAG_C) != 0) {
-				MemPtr.Word = PC.Word = POP();
-				return (4);
-			}
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___D9() {/* EXX */
-			ushort tmp = BC.Word;
-			BC = _BC;
-			_BC.Word = tmp;
-
-			tmp = DE.Word;
-			DE = _DE;
-			_DE.Word = tmp;
-
-			tmp = HL.Word;
-			HL = _HL;
-			_HL.Word = tmp;
-
-			return (1);
-		}
-
-
-		static int ___DA() {/* JP C, nnnn */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PC.Word = (ushort)((AF.Low & FLAG_C) != 0 ? MemPtr.Word : PC.Word + 2);
-			return (3);
-		}
-
-
-		static int ___DB() {/* IN A, ( n ) */
-			MemPtr.Word = (ushort)((AF.High << 8) + VGA.PEEK8(PC.Word++));
-			AF.High = (byte)GestPort.ReadPort(MemPtr.Word++);
-			return (3);
-		}
-
-
-		static int ___DC() {/* CALL C, nnnn */
-			if ((AF.Low & FLAG_C) != 0)
-				return ___CD();
-
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___DD() {/* Special code DD : IX */
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			return (1 + tabIX[VGA.PEEK8(PC.Word++)]());
-		}
-
-
-		static int ___DE() {/* SBC A, ee */
-			SUB_R8(VGA.PEEK8(PC.Word++), AF.Low);
-			return (2);
-		}
-
-
-		static int ___DF() {/* RST 18 */
-			return RST(0x18);
-		}
-
-
-		static int ___E0() {/* RET PO */
-			if ((AF.Low & FLAG_V) == 0) {
-				MemPtr.Word = PC.Word = POP();
-				return (4);
-			}
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___E1() {/* POP HL */
-			HL.Word = POP();
-			return (3);
-		}
-
-
-		static int ___E2() {/* JP PO, nnnn */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PC.Word = (ushort)(((AF.Low & FLAG_V) == 0) ? MemPtr.Word : PC.Word + 2);
-			return (3);
-		}
-
-
-		static int ___E3() {/* EX (SP), HL */
-			MemPtr.Word = VGA.PEEK16(SP.Word);
-			VGA.POKE16(SP.Word, HL.Word);
-			HL.Word = MemPtr.Word;
-			SupIrqWaitState = 1;
-			return (6);
-		}
-
-
-		static int ___E4() {/* CALL PO, nnnn */
-			if ((AF.Low & FLAG_V) == 0)
-				return ___CD();
-
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___E5() {/* PUSH HL */
-			return PUSH(HL.Word);
-		}
-
-
-		static int ___E6() {/* AND ee */
-			AND_R8(VGA.PEEK8(PC.Word++));
-			return (2);
-		}
-
-
-		static int ___E7() {/* RST 20 */
-			return RST(0x20);
-		}
-
-
-		static int ___E8() {/* RET PE */
-			if ((AF.Low & FLAG_V) != 0) {
-				MemPtr.Word = PC.Word = POP();
-				return (4);
-			}
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___E9() {/* JP ( HL ) */
-			PC.Word = HL.Word;
-			return (1);
-		}
-
-
-		static int ___EA() {/* JP PE, nnnn */
-
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PC.Word = (ushort)((AF.Low & FLAG_V) != 0 ? MemPtr.Word : PC.Word + 2);
-			return (3);
-		}
-
-
-		static int ___EB() {/* EX DE, HL */
-			ushort tmp = DE.Word;
-			DE.Word = HL.Word;
-			HL.Word = tmp;
-			return (1);
-		}
-
-
-		static int ___EC() {/* CALL PE, nnnn */
-			if ((AF.Low & FLAG_V) != 0)
-				return ___CD();
-
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___ED() {/* Special code ED */
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			return (tabED[VGA.PEEK8(PC.Word++)]());
-		}
-
-
-		static int ___EE() {/* XOR ee */
-			XOR_R8(VGA.PEEK8(PC.Word++));
-			return (2);
-		}
-
-
-		static int ___EF() {/* RST 28 */
-			return RST(0x28);
-		}
-
-
-		static int ___F0() {/* RET P */
-			if ((AF.Low & FLAG_S) == 0) {
-				MemPtr.Word = PC.Word = POP();
-				return (4);
-			}
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___F1() {/* POP AF */
-			AF.Word = POP();
-			return (3);
-		}
-
-
-		static int ___F2() {/* JP P, nnnn */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PC.Word = (ushort)(((AF.Low & FLAG_S) == 0) ? MemPtr.Word : PC.Word + 2);
-			return (3);
-		}
-
-
-		static int ___F3() {/* DI */
-			IFF1 = IFF2 = 0;
-			return (1);
-		}
-
-
-		static int ___F4() {/* CALL P, nnnn */
-			if ((AF.Low & FLAG_S) == 0)
-				return ___CD();
-
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___F5() {/* PUSH AF */
-			return PUSH(AF.Word);
-		}
-
-
-		static int ___F6() {/* OR ee */
-			OR_R8(VGA.PEEK8(PC.Word++));
-			return (2);
-		}
-
-
-		static int ___F7() {/* RST 30 */
-			return RST(0x30);
-		}
-
-
-		static int ___F8() {/* RET M */
-			if ((AF.Low & FLAG_S) != 0) {
-				MemPtr.Word = PC.Word = POP();
-				return (4);
-			}
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___F9() {/* LD SP, HL */
-			SP.Word = HL.Word;
-			SupIrqWaitState = 1;
-			return (2);
-		}
-
-
-		static int ___FA() {/* JP M, nnnn */
-			MemPtr.Word = VGA.PEEK16(PC.Word);
-			PC.Word = (ushort)((AF.Low & FLAG_S) != 0 ? MemPtr.Word : PC.Word + 2);
-			return (3);
+		static int ___FE() {
+			int x = VGA.PEEK8(PC.Word++), z = AF.High - x;
+			AF.Low = (byte)(TabSZN[z & 0xFF] | (x & FLAGS_53) | TabHVC[(AF.High ^ x ^ z) & 0x190]);
+			return 2;
 		}
-
-
-		static int ___FB() {/* EI */
-			IFF1 = IFF2 = 1;
-			return (1);
-		}
-
-
-		static int ___FC() {/* CALL M, nnnn */
-			if ((AF.Low & FLAG_S) != 0)
-				return ___CD();
-
-			PC.Word += 2;
-			return (3);
-		}
-
-
-		static int ___FD() {/* Special code FD : IY */
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			return (1 + tabIY[VGA.PEEK8(PC.Word++)]());
-		}
-
-
-		static int ___FE() {/* CP ee */
-			CP_R8(VGA.PEEK8(PC.Word++));
-			return (2);
-		}
-
-
-		static int ___FF() {/* RST 38 */
-			return RST(0x38);
-		}
-
 
 		public static int ExecInstr() {
-			IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-			int LastInstr = VGA.PEEK8(PC.Word++);
-			int r = tabinstr[LastInstr]();
-			if (IRQ > 0 && IFF1 > 0 && LastInstr != 0xFB) { // Pas d'irq juste après un EI
-				if (Halt != 0) {
-					Halt = 0;
-					PC.Word++;
-				}
-				IRQ = 0;    // Acquittement interruption
-				IFF1 = IFF2 = 0;
-				IR.Low = (byte)(((IR.Low + 1) & 0x7F) | (IR.Low & 0x80));
-				VGA.CntHSync &= 0x1F;       // Raz du bit 5 du compteur HSYNC du G.A.
-				PUSH(PC.Word);
-				r -= SupIrqWaitState;
-				SupIrqWaitState = 0;
-				if (InterruptMode < 2) { // IM 0 et IM 1 -> RST 38H
-					PC.Word = 0x38;
-					r += 6;
-				}
-				else { // IM 2 -> CALL ( adr( IR ) )
-					PC.Word = (ushort)VGA.PEEK16((ushort)(IR.Word | 0xFF));
-					r += 7;
-				}
+			IR.Low ^= (byte)(((IR.Low + 1) ^ IR.Low) & 0x7F);
+			int t = TabInstr[LastInstr = VGA.PEEK8(PC.Word++)]();
+			if (IRQ != 0 && IFF1 != 0 && LastInstr != 0xFB) {
+				PC.Word += (ushort)Halt;
+				SP.Word -= 2;
+				VGA.POKE16(SP.Word, PC.Word);
+				IR.Low ^= (byte)(((IR.Low + 1) ^ IR.Low) & 0x7F);
+				memPtr = PC.Word = (ushort)(InterruptMode < 2 ? 0x38 : VGA.PEEK16(IR.Word | 0xFF));
+				t += 6 + (InterruptMode >> 1) - SupIrqWaitState;
+				Halt = SupIrqWaitState = IRQ = IFF1 = IFF2 = 0;
+				VGA.CntHSync &= 0x1F;
 			}
-			return (r);
+			return t;
 		}
 
 		public static void Init() {
 			for (int i = 0; i < 256; i++) {
-				int p = (i & 1) + ((i & 0x02) >> 1) + ((i & 0x04) >> 2) + ((i & 0x08) >> 3) + ((i & 0x10) >> 4) + ((i & 0x20) >> 5) + ((i & 0x40) >> 6) + ((i & 0x80) >> 7);
-				Parite[i] = (byte)((i > 0 ? i & FLAG_S : FLAG_Z) | (i & (FLAG_5 | FLAG_3)) | ((p & 1) > 0 ? 0 : FLAG_V));
+				TabSZYX[i] = (byte)(i == 0 ? FLAG_Z : i & 0xA8);
+				TabSZYXN[i] = (byte)(TabSZYX[i] | FLAG_N);
+				TabSZN[i] = (byte)(TabSZYXN[i] & (FLAG_S | FLAG_Z | FLAG_N));
+				TabSZYXP[i] = (byte)(TabSZYX[i] + ((((i >> 7) ^ (i >> 6) ^ (i >> 5) ^ (i >> 4) ^ (i >> 3) ^ (i >> 2) ^ (i >> 1) ^ i) & 1) > 0 ? 0 : FLAG_V));
+				TabSZYXHP[i] = (byte)(TabSZYXP[i] | FLAG_H);
+				TabHVC[i << 1] = TabHVC[1 + (i << 1)] = (byte)((i >> 7) | ((i << 1) & FLAG_H) | (i < 64 || i > 191 ? 0 : FLAG_V));
+				TabInc[i] = (byte)(((i & 0x0F) > 0 ? 0 : FLAG_H) | TabSZYX[i] | (i == 0x80 ? FLAG_V : 0));
+				TabDec[i] = (byte)(FLAG_N | ((i & 0x0F) == 0x0F ? FLAG_H : 0) | TabSZYX[i] | (i == 0x7F ? FLAG_V : 0));
+				TabSR[i] = (byte)(FLAG_H | (i > 0 ? i & FLAG_S : FLAG_Z | FLAG_V));
 			}
-			Reset();
 		}
 
 		public static void Reset() {
-			CBIndex = false;
-			AdrCB = 0;
+			IRQ = IFF1 = IFF2 = 0;
 			SupIrqWaitState = 0;
-			IRQ = 0;
-			Halt = 0;
 			AF.Word = BC.Word = DE.Word = HL.Word = IR.Word = IX.Word = IY.Word = SP.Word = PC.Word = _AF.Word = _BC.Word = _DE.Word = _HL.Word = 0;
-			IFF1 = IFF2 = InterruptMode = 0;
+			InterruptMode = 0;
 		}
 	}
 }

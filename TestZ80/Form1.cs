@@ -12,10 +12,21 @@ namespace TestZ80 {
 		private bool finMain = false;
 		private Desasm desasm = new Desasm();
 		private bool appActive = true;
+		private bool doExec = false;
+
+		private void DoSync() {
+			led.Checked = UPD.led;
+			track.Text = "Piste " + UPD.CurrTrack[0].ToString("00");
+			ShowValues();
+			BitmapCpc.RefreshBitmap();
+			pictureBox1.Refresh();
+			Application.DoEvents();
+		}
 
 		public Form1() {
-			try {
+			//try {
 				InitializeComponent();
+				//debugMode.Checked = true;
 				Show();
 				desasm.Init();
 				pictureBox1.Image = new Bitmap(pictureBox1.Width, pictureBox1.Height);
@@ -33,22 +44,24 @@ namespace TestZ80 {
 					bool DoResync = CRTC.CycleCRTC(cycle);
 					UPD.Cycle(cycle);
 					nbCycles += cycle;
-					if (DoResync && nbCycles > 1000 || nbCycles > 100000) {
-						led.Checked = UPD.led;
-						track.Text = "Piste " + UPD.CurrTrack[0].ToString("00");
-						ShowValues();
-						BitmapCpc.RefreshBitmap();
-						pictureBox1.Refresh();
-						Application.DoEvents();
-						nbCycles = 0;
+					if (debugMode.Checked) {
+						while (!doExec && debugMode.Checked) {
+							DoSync();
+						}
+						doExec = false;
+					}
+					else {
+						if (DoResync && nbCycles > 1000 || nbCycles > 100000) {
+							DoSync();
+							nbCycles = 0;
+						}
 					}
 				}
-			}
-			catch (Exception ex) {
-				MessageBox.Show(ex.StackTrace, ex.Message);
-			}
+			//}
+			//catch (Exception ex) {
+			//	MessageBox.Show(ex.StackTrace, ex.Message);
+			//}
 		}
-
 
 		private void ShowValues() {
 			string str = "";
@@ -68,8 +81,8 @@ namespace TestZ80 {
 			IY.Text = Z80.IY.Word.ToString("X4");
 			I.Text = Z80.IR.High.ToString("X2");
 			R.Text = Z80.IR.Low.ToString("X2");
+			IM.Text = Z80.InterruptMode.ToString();
 		}
-
 
 		//[System.Security.Permissions.PermissionSet(System.Security.Permissions.SecurityAction.Demand, Name = "FullTrust")]
 		//protected override void WndProc(ref Message m) {
@@ -93,10 +106,13 @@ namespace TestZ80 {
 			return base.ProcessKeyPreview(ref m);
 		}
 
-		
 		private void Form1_FormClosed(object sender, FormClosedEventArgs e) {
-			System.Threading.Thread.Sleep(1000);
+			//System.Threading.Thread.Sleep(1000);
 			finMain = true;
+		}
+
+		private void button1_Click(object sender, EventArgs e) {
+			doExec = true;
 		}
 	}
 }
