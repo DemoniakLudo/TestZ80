@@ -44,6 +44,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="DirectBitmap.cs" />
     <Compile Include="GestDsk\CPCEMUEnt.cs" />
     <Compile Include="GestDsk\CPCEMUSect.cs" />
     <Compile Include="GestDsk\CPCEMUTrack.cs" />

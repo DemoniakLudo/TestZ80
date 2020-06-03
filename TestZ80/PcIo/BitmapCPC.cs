@@ -1,22 +1,12 @@
-﻿using System;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
+﻿using System.Drawing;
 
 namespace TestZ80 {
 	static class BitmapCpc {
-		static private Bitmap source = null;
-		static private Rectangle rect;
-		static private byte[] pixels;
-		static private int width;
+		static private DirectBitmap source = null;
 		static private int[][][] TabPoints = new int[4][][];
 
-		static public void Init(Bitmap s) {
-			source = s;
-			width = source.Width;
-			int height = source.Height;
-			pixels = new byte[width * height * (Bitmap.GetPixelFormatSize(source.PixelFormat) >> 3)];
-			rect = new Rectangle(0, 0, width, height);
+		static public Bitmap Init(int width, int height) {
+			source = new DirectBitmap(width, height);
 			for (int i = 0; i < 4; i++)
 				TabPoints[i] = new int[256][];
 
@@ -58,26 +48,15 @@ namespace TestZ80 {
 				TabPoints[3][i][0] = TabPoints[3][i][1] = TabPoints[3][i][2] = TabPoints[3][i][3] = b7 + b3;
 				TabPoints[3][i][4] = TabPoints[3][i][5] = TabPoints[3][i][6] = TabPoints[3][i][7] = b6 + b2;
 			}
-		}
-
-		static public void RefreshBitmap() {
-			BitmapData bitmapData = source.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
-			Marshal.Copy(pixels, 0, bitmapData.Scan0, pixels.Length);
-			source.UnlockBits(bitmapData);
+			return source.Bitmap;
 		}
 
 		static public void TraceMot(int x, int y, int adrMemCpc) {
-			int adrPixel = ((y * width) + x) << 3;
-			int posPixel = adrPixel;
+			x <<= 1;
+			y <<= 1;
 			if (adrMemCpc < 0) {
-				byte r = (byte)VGA.tabCoul[16];
-				byte v = (byte)(VGA.tabCoul[16] >> 8);
-				byte b = (byte)(VGA.tabCoul[16] >> 16);
 				for (int i = 0; i < 16; i++) {
-					pixels[posPixel++] = r;
-					pixels[posPixel++] = v;
-					pixels[posPixel++] = b;
-					pixels[posPixel++] = 0xFF;
+					source.SetPixelDoubleHeight(x + i, y, VGA.tabCoul[16]);
 					if (i == 7)
 						VGA.SyncColor();
 				}
@@ -85,18 +64,13 @@ namespace TestZ80 {
 			else {
 				int oct = VGA.ram[adrMemCpc++];
 				for (int i = 0; i < 16; i++) {
-					int color = VGA.tabCoul[TabPoints[CRTC.LastMode][oct][i & 7]];
-					pixels[posPixel++] = (byte)(color);
-					pixels[posPixel++] = (byte)(color >> 8);
-					pixels[posPixel++] = (byte)(color >> 16);
-					pixels[posPixel++] = 0xFF;
+					source.SetPixelDoubleHeight(x + i, y, VGA.tabCoul[TabPoints[CRTC.LastMode][oct][i & 7]]);
 					if (i == 7) {
 						VGA.SyncColor();
 						oct = VGA.ram[adrMemCpc];
 					}
 				}
 			}
-			Buffer.BlockCopy(pixels, adrPixel, pixels, adrPixel + (width << 2), 64);
 		}
 	}
 }
