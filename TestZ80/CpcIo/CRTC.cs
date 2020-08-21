@@ -163,7 +163,7 @@ namespace TestZ80 {
 					VHCount = (byte)Math.Max(0, Math.Min((TailleHBL - 2), 4));
 				}
 				if (x < TAILLE_X_ECR && LigneCRTC >= TAILLE_VBL) {
-					BitmapCpc.TraceMot(x, y - 1, HDT && VDT ? ((((HCC + MaCRTC) << 1) + (((HCC + MaCRTC) & 0x1000) << 2)) & 0xC7FF) | (VLC << 11) : -1);
+					VGA.TraceMot(x, y - 1, HDT && VDT ? ((((HCC + MaCRTC) << 1) + (((HCC + MaCRTC) & 0x1000) << 2)) & 0xC7FF) | (VLC << 11) : -1);
 					x += 8;
 				}
 				else {

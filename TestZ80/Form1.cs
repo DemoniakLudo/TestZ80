@@ -44,10 +44,9 @@ namespace TestZ80 {
 			InitializeComponent();
 			Show();
 			desasm.Init();
-			pictureBox1.Image = BitmapCpc.Init(pictureBox1.Width, pictureBox1.Height);
 			VGA.DecodeurAdresse = 0;// VGA.ROMSUP_OFF;
 			Z80.Init();
-			VGA.Init();
+			pictureBox1.Image = VGA.Init(pictureBox1.Width, pictureBox1.Height);
 			PPI.Init();
 			UPD.Init();
 			CRTC.Init();
