@@ -1,4 +1,7 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 
 namespace TestZ80 {
 	class ImgDSK {
@@ -12,16 +15,56 @@ namespace TestZ80 {
 		public byte[][][] Data;
 
 		public ImgDSK() {
+			Infos.id = "MV - CPCEMU Disk - File\r\nDisk - Info\r\n";
 			Tracks = new CPCEMUTrack[MAX_TRACKS][];
 			Data = new byte[MAX_TRACKS][][];
 			for (int t = 0; t < MAX_TRACKS; t++) {
 				Tracks[t] = new CPCEMUTrack[2];
 				Tracks[t][0] = new CPCEMUTrack();
+				Tracks[t][0].ID = "Track-Info\r\n";
 				Tracks[t][1] = new CPCEMUTrack();
+				Tracks[t][1].ID = "Track-Info\r\n";
 				Data[t] = new byte[2][];
 				Data[t][0] = new byte[0x1800];
 				Data[t][1] = new byte[0x1800];
 			}
+		}
+
+		public void Save(string fileName) {
+			BinaryWriter wr = new BinaryWriter(new FileStream(fileName, FileMode.OpenOrCreate));
+			wr.Write(Encoding.ASCII.GetBytes(Infos.id));
+			wr.Write(Infos.NbTracks);
+			wr.Write(Infos.NbHeads);
+			wr.Write(Infos.TrackSize);
+			wr.Write(Infos.TrackSizeTable);
+			for (int t = 0; t < Infos.NbTracks; t++) {
+				for (int h = 0; h < Infos.NbHeads; h++) {
+					CPCEMUTrack tr = Tracks[t][h];
+					wr.Write(Encoding.ASCII.GetBytes(tr.ID));
+					wr.Write(tr.Track);
+					wr.Write(tr.Head);
+					wr.Write(tr.Unused);
+					wr.Write(tr.SectSize);
+					wr.Write(tr.NbSect);
+					wr.Write(tr.Gap3);
+					wr.Write(tr.OctRemp);
+					int tailleData = 0;
+					for (int s = 0; s < CPCEMUTrack.MAX_SECTS; s++) {
+						CPCEMUSect sect = tr.Sect[s];
+						wr.Write(sect.C);
+						wr.Write(sect.H);
+						wr.Write(sect.R);
+						wr.Write(sect.N);
+						wr.Write(sect.ST1);
+						wr.Write(sect.ST2);
+						wr.Write(sect.SectSize);
+						if (s < tr.NbSect)
+							tailleData += sect.SectSize;
+					}
+					wr.Write(Data[t][h], 0, tailleData);
+				}
+			}
+			wr.Close();
 		}
 
 		public void Load(string fileName) {
@@ -65,12 +108,12 @@ namespace TestZ80 {
 									n = (n + 0xFF) & 0x1F00;
 								else
 									if (n == 0) {
-										n = sect.N;
-										if (n < 6)
-											n = 128 << n;
-										else
-											n = 0x1800;
-									}
+									n = sect.N;
+									if (n < 6)
+										n = 128 << n;
+									else
+										n = 0x1800;
+								}
 								tailleData += n > 0x100 ? n : 0x100;
 							}
 						}

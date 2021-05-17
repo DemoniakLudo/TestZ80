@@ -400,13 +400,15 @@ namespace TestZ80 {
 				//		TapeWrite();            // F11
 				//	break;
 
-				//case 0x7B:
+				case 0x7B:
+					SaveDsk(Shift);
+
 				//	if (Shift)
 				//		Assemble();             // SHIFT + F12
 				//	else
 				//		SaveBMP();              // F12
 				//	return (1);
-				//	break;
+					break;
 			}
 			return (0);
 		}
@@ -433,6 +435,14 @@ namespace TestZ80 {
 			DialogResult result = dlg.ShowDialog();
 			if (result == DialogResult.OK)
 				UPD.Dsk[drive].Load(dlg.FileName);
+		}
+
+		static private void SaveDsk(int drive) {
+			SaveFileDialog dlg = new SaveFileDialog();
+			dlg.Filter = "Fichiers DSK (*.dsk)|*.dsk";
+			DialogResult result = dlg.ShowDialog();
+			if (result == DialogResult.OK)
+				UPD.Dsk[drive].Save(dlg.FileName);
 		}
 	}
 }

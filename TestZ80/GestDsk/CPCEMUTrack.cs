@@ -1,7 +1,11 @@
-﻿namespace TestZ80 {
+﻿using System.Runtime.InteropServices;
+
+namespace TestZ80 {
+	[StructLayout(LayoutKind.Sequential, Pack = 1)]
 	public class CPCEMUTrack {
 		public const int MAX_SECTS = 29;     // Nbre maxi de secteurs/pistes
 
+		[MarshalAs(UnmanagedType.ByValTStr, SizeConst = 0x10)]
 		public string ID;// "Track-Info\r\n"
 		public byte Track;
 		public byte Head;

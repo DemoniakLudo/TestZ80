@@ -9,7 +9,8 @@ namespace TestZ80 {
 			try {
 				Application.Run(new Form1());
 			}
-			catch {
+			catch (Exception ex) {
+				MessageBox.Show(ex.StackTrace, ex.Message);
 			}
 		}
 	}
